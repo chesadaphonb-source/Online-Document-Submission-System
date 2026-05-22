@@ -1,0 +1,28 @@
+# Node dependencies
+node_modules/
+
+# Local env files (contain database keys and secrets)
+.env
+.env.local
+.env.*.local
+
+# Vercel, build, and recovery files
+.vercel/
+dist/
+vercel_deployment_files.json
+recover_project.cjs
+recovered_assembled/
+recovered_source/
+recovered_deep/
+recovered_log_content/
+*.assembled.tsx
+*.assembled_log.tsx
+step_*.json
+notif_step_*.json
+early_content_*.tsx
+*.txt
+*.cjs
+*.mjs
+*.ps1
+*.sql
+*.xlsx

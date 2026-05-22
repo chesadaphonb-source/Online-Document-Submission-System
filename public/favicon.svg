@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Green circle background -->
+  <circle cx="32" cy="32" r="32" fill="#15803d"/>
+  <!-- Leaf shape -->
+  <path d="M32 10 C48 10, 56 22, 54 36 C52 50, 40 56, 32 54 C24 52, 14 44, 14 32 C14 18, 22 10, 32 10Z"
+        fill="#22c55e" opacity="0.9"/>
+  <!-- Leaf vein -->
+  <path d="M32 14 C32 32, 30 44, 28 53"
+        stroke="#15803d" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M32 28 C40 24, 48 26, 53 32"
+        stroke="#15803d" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.6"/>
+  <path d="M32 40 C40 36, 48 37, 52 42"
+        stroke="#15803d" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+  <!-- Letter K -->
+  <text x="20" y="44" font-family="Arial Black, sans-serif" font-size="26" font-weight="900"
+        fill="white" opacity="0.95">K</text>
+</svg>
