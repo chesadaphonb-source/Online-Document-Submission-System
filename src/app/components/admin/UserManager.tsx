@@ -56,15 +56,16 @@ function TeacherCard({ user, onUpdate }: {
   const [editName, setEditName] = useState(user.name);
   const [editDept, setEditDept] = useState(user.department || '');
   const [editPos, setEditPos] = useState(user.position || '');
+  const [editPassword, setEditPassword] = useState(user.plain_password || '');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       if (isSupabaseConfigured && supabase) {
-        // Update name and department in the users table
+        // Update name, department, and plain_password in the users table
         const { error: userError } = await supabase.from('users').update({
-          name: editName, department: editDept
+          name: editName, department: editDept, plain_password: editPassword
         }).eq('id', user.id);
         if (userError) throw userError;
 
@@ -76,7 +77,7 @@ function TeacherCard({ user, onUpdate }: {
           if (teacherError) throw teacherError;
         }
       }
-      onUpdate(user.id, { name: editName, department: editDept, position: editPos });
+      onUpdate(user.id, { name: editName, department: editDept, position: editPos, plain_password: editPassword });
       toast.success('บันทึกข้อมูลแล้ว');
       setEditing(false);
     } catch (e: any) {
@@ -110,10 +111,15 @@ function TeacherCard({ user, onUpdate }: {
             <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
               <Mail size={10} />{user.email}
             </p>
-            {user.plain_password && (
-              <p className="text-xs text-gray-500 mt-1 bg-gray-50 border border-gray-150 rounded px-2 py-0.5 w-fit font-mono flex items-center gap-1 select-all cursor-pointer" title="คลิกเพื่อคลุมดำคัดลอกรหัสผ่าน">
+            {user.plain_password ? (
+              <p className="text-xs text-gray-500 mt-1 bg-gray-50 border border-gray-150 rounded px-2 py-0.5 w-fit font-mono flex items-center gap-1 select-all cursor-pointer animate-fade-in" title="คลิกเพื่อคลุมดำคัดลอกรหัสผ่าน">
                 <span className="font-semibold text-[10px] text-gray-400 select-none">PASSWORD:</span>
                 <span className="text-gray-700 font-bold">{user.plain_password}</span>
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1 bg-gray-50/50 border border-dashed border-gray-250 rounded px-2 py-0.5 w-fit font-mono flex items-center gap-1 select-none">
+                <span className="font-semibold text-[10px] text-gray-300">PASSWORD:</span>
+                <span className="text-gray-450 italic">ยังไม่ได้ลงทะเบียนรหัสผ่าน</span>
               </p>
             )}
             <div className="flex flex-wrap gap-1 mt-2">
@@ -146,7 +152,7 @@ function TeacherCard({ user, onUpdate }: {
 
             {/* Edit info */}
             {!editing ? (
-              <button onClick={() => { setEditName(user.name); setEditDept(user.department || ''); setEditPos(user.position || ''); setEditing(true); }}
+              <button onClick={() => { setEditName(user.name); setEditDept(user.department || ''); setEditPos(user.position || ''); setEditPassword(user.plain_password || ''); setEditing(true); }}
                 className="flex items-center gap-1.5 text-xs text-green-700 hover:bg-green-50 px-2 py-1 rounded-lg border border-green-200">
                 <Edit2 size={11} /> แก้ไขข้อมูล
               </button>
@@ -154,12 +160,15 @@ function TeacherCard({ user, onUpdate }: {
               <div className="space-y-2">
                 <input value={editName} onChange={e => setEditName(e.target.value)}
                   placeholder="ชื่อ-นามสกุล"
-                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400" />
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 text-gray-800" />
                 <input value={editDept} onChange={e => setEditDept(e.target.value)}
                   placeholder="ภาควิชา"
-                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400" />
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 text-gray-800" />
+                <input value={editPassword} onChange={e => setEditPassword(e.target.value)}
+                  placeholder="รหัสผ่านเข้าใช้งาน (เพื่อความสะดวกของแอดมิน)"
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 text-gray-800 font-mono" />
                 <select value={editPos} onChange={e => setEditPos(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400">
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 text-gray-800 cursor-pointer">
                   <option value="">-- ตำแหน่ง --</option>
                   <option>อาจารย์</option>
                   <option>ผู้ช่วยศาสตราจารย์</option>
