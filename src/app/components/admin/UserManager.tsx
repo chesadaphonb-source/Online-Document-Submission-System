@@ -110,6 +110,12 @@ function TeacherCard({ user, onUpdate }: {
             <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
               <Mail size={10} />{user.email}
             </p>
+            {user.plain_password && (
+              <p className="text-xs text-gray-500 mt-1 bg-gray-50 border border-gray-150 rounded px-2 py-0.5 w-fit font-mono flex items-center gap-1 select-all cursor-pointer" title="คลิกเพื่อคลุมดำคัดลอกรหัสผ่าน">
+                <span className="font-semibold text-[10px] text-gray-400 select-none">PASSWORD:</span>
+                <span className="text-gray-700 font-bold">{user.plain_password}</span>
+              </p>
+            )}
             <div className="flex flex-wrap gap-1 mt-2">
               {user.is_advisor && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">อาจารย์ที่ปรึกษา</span>}
               {user.is_department_head && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">หัวหน้าภาค</span>}
@@ -317,6 +323,7 @@ export function UserManager() {
           role,
           department,
           faculty,
+          plain_password,
           created_at,
           teachers (
             position,
@@ -339,6 +346,7 @@ export function UserManager() {
             role: u.role,
             department: u.department,
             faculty: u.faculty,
+            plain_password: u.plain_password,
             created_at: u.created_at,
             position: t?.position || '',
             is_advisor: t?.is_advisor || false,

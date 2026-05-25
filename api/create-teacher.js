@@ -48,7 +48,8 @@ export default async function handler(req, res) {
         name: name.trim(),
         role: 'teacher',
         department: department || '',
-        faculty: 'คณะสิ่งแวดล้อม'
+        faculty: 'คณะสิ่งแวดล้อม',
+        plain_password: password
       });
 
     if (userError) {
