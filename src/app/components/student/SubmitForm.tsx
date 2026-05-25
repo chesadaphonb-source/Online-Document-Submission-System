@@ -301,6 +301,10 @@ export function SubmitForm() {
       toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
+    if (currentStep === 2 && attachments.length === 0) {
+      toast.error('กรุณาแนบเอกสารหลักฐานอย่างน้อย 1 ไฟล์');
+      return;
+    }
     setCurrentStep(prev => prev + 1);
   };
 
@@ -374,6 +378,11 @@ export function SubmitForm() {
 
   const handleSubmit = async () => {
     if (!selectedForm || !currentUser) return;
+
+    if (attachments.length === 0) {
+      toast.error('กรุณาแนบเอกสารหลักฐานอย่างน้อย 1 ไฟล์');
+      return;
+    }
 
     // Check if advisor selection is required but not selected
     const hasAdvisorStep = displayApprovalLevels.some(l => l.role === 'อาจารย์ที่ปรึกษา');
@@ -794,7 +803,9 @@ export function SubmitForm() {
                 ))}
               </div>
             ) : (
-              <p className="text-center text-sm text-gray-400 py-4">ยังไม่มีเอกสารแนบ (ไม่บังคับ)</p>
+              <p className="text-center text-sm text-amber-600 py-4 font-medium flex items-center justify-center gap-1.5 bg-amber-50 rounded-lg border border-amber-100">
+                <AlertCircle size={16} className="shrink-0" /> ยังไม่มีเอกสารแนบ (จำเป็นต้องแนบอย่างน้อย 1 ไฟล์)
+              </p>
             )}
           </div>
         )}
