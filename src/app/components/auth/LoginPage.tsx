@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { Eye, EyeOff, GraduationCap, BookOpen, ArrowRight, CheckCircle, ChevronLeft } from 'lucide-react';
@@ -34,8 +34,15 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [adminClicks, setAdminClicks] = useState(0);
-  const { login, loginAsStudent, logout } = useAuth();
+  const { login, loginAsStudent, logout, currentUser, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Auto redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && currentUser) {
+      navigate(`/${currentUser.role}/dashboard`, { replace: true });
+    }
+  }, [currentUser, authLoading, navigate]);
 
   const resetStudent = () => { setStudentName(''); setStudentId(''); setStudentDept(''); setStudentEmail(''); };
 

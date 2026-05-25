@@ -163,7 +163,7 @@ function AdminNotificationDropdown({ onClose }: { onClose: () => void }) {
 }
 
 export function AppLayout({ role }: { role: 'student' | 'teacher' | 'admin' }) {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, isLoading } = useAuth();
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -172,9 +172,10 @@ export function AppLayout({ role }: { role: 'student' | 'teacher' | 'admin' }) {
   const roleInfo = getRoleLabel(role);
 
   useEffect(() => {
+    if (isLoading) return;
     if (!currentUser) { navigate('/login', { replace: true }); return; }
     if (currentUser.role !== role) navigate(`/${currentUser.role}/dashboard`, { replace: true });
-  }, [currentUser, role, navigate]);
+  }, [currentUser, role, navigate, isLoading]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -195,6 +196,17 @@ export function AppLayout({ role }: { role: 'student' | 'teacher' | 'admin' }) {
         ? submissions.filter(s => s.status === 'submitted' || s.status === 'teacher_rejected' || s.status === 'pending_close').length
         : unreadCount(currentUser.id, currentUser.role))
     : 0;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-green-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-[#1a5c2e] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-[#1a5c2e] text-sm font-medium">กำลังตรวจสอบสิทธิ์...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) return null;
 
