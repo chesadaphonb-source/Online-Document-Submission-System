@@ -469,7 +469,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
           const sigW = 40; // mm
           const sigH = 14; // mm
           const sx = (step.signatureX / 100) * 210;
-          const sy = (step.signatureY / 100) * 297;
+          const sy = ((step.signatureY / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
           doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
         }
 
@@ -479,7 +479,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
             const sigW = 40; // mm
             const sigH = 14; // mm
             const sx = (pos.x / 100) * 210;
-            const sy = (pos.y / 100) * 297;
+            const sy = ((pos.y / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
             try {
               doc.addImage(step.signatureData!, 'PNG', sx, sy, sigW, sigH);
             } catch (err) {

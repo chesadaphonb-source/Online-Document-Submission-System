@@ -211,6 +211,100 @@ export function UserManager() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
+  // ── Add New Teacher States ──
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newDept, setNewDept] = useState('');
+  const [newPos, setNewPos] = useState('อาจารย์');
+  const [newIsAdvisor, setNewIsAdvisor] = useState(true);
+  const [newIsDeptHead, setNewIsDeptHead] = useState(false);
+  const [newIsDean, setNewIsDean] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  const handleAddTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail.trim() || !newPassword.trim() || !newName.trim()) {
+      toast.error('กรุณากรอกอีเมล รหัสผ่าน และชื่อ-นามสกุล ให้ครบถ้วน');
+      return;
+    }
+    setAdding(true);
+    try {
+      if (isSupabaseConfigured) {
+        const response = await fetch('/api/create-teacher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: newEmail.trim(),
+            password: newPassword,
+            name: newName.trim(),
+            department: newDept,
+            position: newPos,
+            isAdvisor: newIsAdvisor,
+            isDepartmentHead: newIsDeptHead,
+            isDean: newIsDean
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'เกิดข้อผิดพลาดในการสร้างบัญชีผู้ใช้');
+        }
+
+        const newUser: DBUser = {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: 'teacher',
+          department: data.user.department,
+          faculty: data.user.faculty,
+          position: data.user.position,
+          is_advisor: data.user.is_advisor,
+          is_department_head: data.user.is_department_head,
+          is_dean: data.user.is_dean,
+          created_at: new Date().toISOString()
+        };
+
+        setUsers(prev => [newUser, ...prev]);
+        toast.success(`เพิ่มอาจารย์ ${newName} สำเร็จแล้ว!`);
+      } else {
+        // Mock mode
+        const mockId = `teacher_${Date.now()}`;
+        const newUser: DBUser = {
+          id: mockId,
+          name: newName.trim(),
+          email: newEmail.trim().toLowerCase(),
+          role: 'teacher',
+          department: newDept,
+          faculty: 'คณะสิ่งแวดล้อม',
+          position: newPos,
+          is_advisor: newIsAdvisor,
+          is_department_head: newIsDeptHead,
+          is_dean: newIsDean,
+          created_at: new Date().toISOString()
+        };
+        setUsers(prev => [newUser, ...prev]);
+        toast.success(`[Mock Mode] เพิ่มอาจารย์ ${newName} สำเร็จแล้ว!`);
+      }
+
+      setShowAddModal(false);
+      setNewEmail('');
+      setNewPassword('');
+      setNewName('');
+      setNewDept('');
+      setNewPos('อาจารย์');
+      setNewIsAdvisor(true);
+      setNewIsDeptHead(false);
+      setNewIsDean(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || 'ไม่สามารถเพิ่มอาจารย์ได้');
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const loadUsers = async () => {
     setLoading(true);
     if (isSupabaseConfigured && supabase) {
@@ -312,7 +406,16 @@ export function UserManager() {
           <p className="text-gray-500 text-sm">จัดการบทบาทอาจารย์และดูข้อมูลนิสิตที่ยื่นคำร้อง</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={loadUsers} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg" title="รีโหลด">
+          {tab === 'teacher' && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg shadow-sm transition-all"
+            >
+              <UserPlus size={15} />
+              <span>เพิ่มอาจารย์</span>
+            </button>
+          )}
+          <button onClick={loadUsers} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg border border-gray-200 bg-white" title="รีโหลด">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
@@ -385,6 +488,169 @@ export function UserManager() {
             }
           </div>
         </>
+      )}
+
+      {/* ── Modal: Add New Teacher ── */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg border border-gray-100 flex flex-col overflow-hidden max-h-[90vh]">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <div className="flex items-center gap-2 text-green-800 font-bold text-base">
+                <UserPlus size={18} />
+                <span>เพิ่มอาจารย์คนใหม่</span>
+              </div>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={adding}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAddTeacher} className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-gray-600">ชื่อ-นามสกุล <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="เช่น ดร.สมนึก พุกงาม"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-green-500 bg-white text-gray-850"
+                  disabled={adding}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-gray-600">อีเมล (บัญชี KU) <span className="text-red-500">*</span></label>
+                  <input
+                    type="email"
+                    required
+                    value={newEmail}
+                    onChange={e => setNewEmail(e.target.value)}
+                    placeholder="เช่น somnimirt.p@ku.th"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-green-500 bg-white text-gray-850"
+                    disabled={adding}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-gray-600">รหัสผ่านเริ่มต้น <span className="text-red-500">*</span></label>
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="รหัสผ่านเข้าสู่ระบบครั้งแรก"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-green-500 bg-white text-gray-850"
+                    disabled={adding}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-gray-600">ภาควิชา</label>
+                  <select
+                    value={newDept}
+                    onChange={e => setNewDept(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-green-500 bg-white text-gray-850 cursor-pointer"
+                    disabled={adding}
+                  >
+                    <option value="">-- เลือกภาควิชา --</option>
+                    <option value="ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม">ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม</option>
+                    <option value="ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม">ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม</option>
+                    <option value="ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน">ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน</option>
+                    <option value="สำนักงานคณะ">สำนักงานคณะ (Admin)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-gray-600">ตำแหน่งวิชาการ</label>
+                  <select
+                    value={newPos}
+                    onChange={e => setNewPos(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-green-500 bg-white text-gray-850 cursor-pointer"
+                    disabled={adding}
+                  >
+                    <option value="อาจารย์">อาจารย์</option>
+                    <option value="ผู้ช่วยศาสตราจารย์">ผู้ช่วยศาสตราจารย์</option>
+                    <option value="รองศาสตราจารย์">รองศาสตราจารย์</option>
+                    <option value="ศาสตราจารย์">ศาสตราจารย์</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Roles checkboxes */}
+              <div className="bg-gray-50 border border-gray-150 rounded-xl p-3.5 space-y-2">
+                <p className="text-xs font-bold text-gray-700">เปิดบทบาทสิทธิ์การอนุมัติเอกสาร:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={newIsAdvisor}
+                      onChange={e => setNewIsAdvisor(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-green-600 focus:ring-green-500 accent-green-600"
+                      disabled={adding}
+                    />
+                    <span className="text-gray-700 font-medium">อาจารย์ที่ปรึกษา</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={newIsDeptHead}
+                      onChange={e => setNewIsDeptHead(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-green-600 focus:ring-green-500 accent-green-600"
+                      disabled={adding}
+                    />
+                    <span className="text-gray-700 font-medium">หัวหน้าภาควิชา</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={newIsDean}
+                      onChange={e => setNewIsDean(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-green-600 focus:ring-green-500 accent-green-600"
+                      disabled={adding}
+                    />
+                    <span className="text-gray-700 font-medium">คณบดี</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Footer buttons inside form */}
+              <div className="pt-2 border-t border-gray-100 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 text-sm font-medium transition-colors"
+                  disabled={adding}
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+                  disabled={adding}
+                >
+                  {adding ? (
+                    <>
+                      <RefreshCw size={15} className="animate-spin" />
+                      <span>กำลังสร้างบัญชี...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={15} />
+                      <span>บันทึกและสร้างบัญชี</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
