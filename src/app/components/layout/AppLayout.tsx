@@ -6,7 +6,7 @@ import { useEffect, useState, ElementType, useRef } from 'react';
 import {
   LayoutDashboard, FileText, ClipboardList, CheckSquare, Users,
   LogOut, Menu, X, Bell, UserCircle, FileSearch, ChevronRight,
-  Inbox, Clock, CheckCircle, XCircle, AlertTriangle, Info,
+  Inbox, Clock, CheckCircle, XCircle, AlertTriangle, Info, MessageSquare,
 } from 'lucide-react';
 import type { Notification, NotificationType } from '../../context/NotificationContext';
 
@@ -253,6 +253,25 @@ export function AppLayout({ role }: { role: 'student' | 'teacher' | 'admin' }) {
         </nav>
 
         <div className="px-3 py-4 border-t border-green-700/50">
+          {/* Admin Contact — Only for student & teacher sides */}
+          {role !== 'admin' && (
+            <div className="mb-4 p-3 bg-white/5 border border-white/10 rounded-xl">
+              <p className="text-xs font-semibold text-green-200 flex items-center gap-1.5 mb-1.5">
+                <MessageSquare size={13} className="text-green-300" />
+                ติดต่อผู้ดูแลระบบ (Admin)
+              </p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs text-green-100">
+                  <span className="font-semibold text-[9px] bg-green-600/50 border border-green-500/30 px-1.5 py-0.5 rounded text-green-200 uppercase shrink-0">LINE</span>
+                  <span className="select-all font-mono font-medium text-xs">@line 0949906050</span>
+                </div>
+                <p className="text-[10px] text-green-300/80 leading-normal">
+                  พบปัญหาการใช้งานหรือระบบขัดข้อง สามารถติดต่อได้ตลอดเวลาทำการ
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 px-3 py-2 mb-1">
             <div className="w-9 h-9 rounded-full bg-green-500/30 border border-green-400/30 flex items-center justify-center shrink-0">
               <UserCircle size={20} className="text-green-200" />

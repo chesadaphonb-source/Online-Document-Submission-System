@@ -229,7 +229,13 @@ export function LoginPage() {
                     );
                   })}
                 </div>
-                <p className="text-xs text-gray-400 text-center mt-6">ระบบสำหรับบุคลากรและนิสิต มก. เท่านั้น</p>
+                <div className="mt-6 border-t border-gray-100 pt-4 text-center">
+                  <p className="text-xs text-gray-400">ระบบสำหรับบุคลากรและนิสิต มก. เท่านั้น</p>
+                  <p className="text-xs text-gray-500 mt-2 flex items-center justify-center gap-1.5">
+                    <span className="font-semibold text-[9px] bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded uppercase shrink-0">LINE ADMIN</span>
+                    <span className="select-all font-mono font-medium text-xs text-gray-700">@line 0949906050</span>
+                  </p>
+                </div>
               </div>
             )}
 
