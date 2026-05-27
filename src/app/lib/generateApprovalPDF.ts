@@ -411,30 +411,90 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
 }
 
 /**
- * Generates the student's actual attachment PDF with all signatures and text blocks superimposed on it.
+ * Helper to draw signatures, extra signatures, text blocks, date blocks, and checkmarks on a jsPDF page.
+ */
+function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
+  for (const step of submission.approvalSteps) {
+    // Signatures
+    if (step.signatureData && step.signatureX !== undefined && step.signatureY !== undefined) {
+      const sigW = 40; // mm
+      const sigH = 14; // mm
+      const sx = (step.signatureX / 100) * 210;
+      const sy = ((step.signatureY / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
+      doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
+    }
+
+    // Extra signatures
+    if (step.signatureData && step.extraSignaturePositions && step.extraSignaturePositions.length > 0) {
+      step.extraSignaturePositions.forEach(pos => {
+        const sigW = 40; // mm
+        const sigH = 14; // mm
+        const sx = (pos.x / 100) * 210;
+        const sy = ((pos.y / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
+        try {
+          doc.addImage(step.signatureData!, 'PNG', sx, sy, sigW, sigH);
+        } catch (err) {
+          console.warn('Failed to embed extra signature on attachment', err);
+        }
+      });
+    }
+
+    // Text blocks
+    if (step.textBlock && step.textBlockX !== undefined && step.textBlockY !== undefined) {
+      const tx = (step.textBlockX / 100) * 210;
+      const ty = (step.textBlockY / 100) * 297;
+      doc.setFontSize((step.textBlockSize || 13) * 0.85);
+      doc.setFont('THSarabun', 'bold');
+      doc.setTextColor(30, 30, 30);
+      doc.text(step.textBlock, tx, ty + 2.5); // align correction
+    }
+
+    // Extra text blocks
+    if (step.extraTextBlocks && step.extraTextBlocks.length > 0) {
+      step.extraTextBlocks.forEach(tb => {
+        const tx = (tb.x / 100) * 210;
+        const ty = (tb.y / 100) * 297;
+        try {
+          doc.setFontSize((tb.size || 13) * 0.85);
+          doc.setFont('THSarabun', 'bold');
+          doc.setTextColor(30, 30, 30);
+          doc.text(tb.val, tx, ty + 2.5);
+        } catch (err) {
+          console.warn('Failed to embed extra text block on attachment', err);
+        }
+      });
+    }
+
+    // Date blocks
+    if (step.dateBlock && step.dateX !== undefined && step.dateY !== undefined) {
+      const dx = (step.dateX / 100) * 210;
+      const dy = (step.dateY / 100) * 297;
+      doc.setFontSize(step.dateSize || 11);
+      doc.setFont('THSarabun', 'bold');
+      doc.setTextColor(30, 30, 30);
+      doc.text(step.dateBlock, dx, dy + 2.5); // align correction
+    }
+
+    // Checkmarks
+    if (step.checkmarkBlock && step.checkmarkX !== undefined && step.checkmarkY !== undefined) {
+      const cx = (step.checkmarkX / 100) * 210;
+      const cy = (step.checkmarkY / 100) * 297;
+      doc.setFontSize(15);
+      doc.setFont('THSarabun', 'bold');
+      doc.setTextColor(22, 101, 52); // green checkmark
+      doc.text(step.checkmarkBlock, cx, cy + 2.5); // align correction
+    }
+  }
+}
+
+/**
+ * Generates the student's actual attachment (PDF or Image) with all signatures and text blocks superimposed on it.
  */
 export async function generateSignedAttachmentPDF(submission: Submission, attachmentUrl: string, fileName: string): Promise<void> {
   const toastId = toast.loading('กำลังประมวลผลและวาดลายเซ็นลงบนแบบฟอร์มคำร้อง...');
   try {
-    const pdfjsLib = await import('pdfjs-dist');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url,
-    ).href;
-
-    // Fetch PDF bytes to avoid CORS
-    let pdfData: ArrayBuffer;
-    if (attachmentUrl.startsWith('blob:') || attachmentUrl.startsWith('data:')) {
-      const res = await fetch(attachmentUrl);
-      pdfData = await res.arrayBuffer();
-    } else {
-      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      pdfData = await res.arrayBuffer();
-    }
-
-    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
-    const numPages = pdf.numPages;
+    const fnLower = fileName.toLowerCase();
+    const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
 
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     
@@ -443,103 +503,80 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
     doc.addFont('THSarabun.ttf', 'THSarabun', 'normal');
     doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
 
-    for (let i = 1; i <= numPages; i++) {
-      if (i > 1) {
-        doc.addPage();
+    if (isImage) {
+      // ── IMAGE FLOW ──
+      // Fetch image bytes to avoid CORS
+      let imgDataUrl = attachmentUrl;
+      if (!attachmentUrl.startsWith('blob:') && !attachmentUrl.startsWith('data:')) {
+        const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        imgDataUrl = URL.createObjectURL(blob);
       }
 
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: 2.5 }); // High-quality rendering
+      // Add image as background A4: 210mm x 297mm
+      const format = fnLower.endsWith('.png') ? 'PNG' : 'JPEG';
+      doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
 
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d')!;
+      // Superimpose signatures & text blocks
+      drawSignaturesAndTexts(doc, submission);
 
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      const pageImgData = canvas.toDataURL('image/jpeg', 0.95);
+      if (imgDataUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(imgDataUrl);
+      }
+    } else {
+      // ── PDF FLOW ──
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url,
+      ).href;
 
-      // Add rendered page image as background (A4: 210mm x 297mm)
-      doc.addImage(pageImgData, 'JPEG', 0, 0, 210, 297);
+      let pdfData: ArrayBuffer;
+      if (attachmentUrl.startsWith('blob:') || attachmentUrl.startsWith('data:')) {
+        const res = await fetch(attachmentUrl);
+        pdfData = await res.arrayBuffer();
+      } else {
+        const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        pdfData = await res.arrayBuffer();
+      }
 
-      // Superimpose signatures & text blocks from approval steps
-      for (const step of submission.approvalSteps) {
-        // Signatures
-        if (step.signatureData && step.signatureX !== undefined && step.signatureY !== undefined) {
-          const sigW = 40; // mm
-          const sigH = 14; // mm
-          const sx = (step.signatureX / 100) * 210;
-          const sy = ((step.signatureY / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
-          doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
+      const numPages = pdf.numPages;
+
+      for (let i = 1; i <= numPages; i++) {
+        if (i > 1) {
+          doc.addPage();
         }
 
-        // Extra signatures
-        if (step.signatureData && step.extraSignaturePositions && step.extraSignaturePositions.length > 0) {
-          step.extraSignaturePositions.forEach(pos => {
-            const sigW = 40; // mm
-            const sigH = 14; // mm
-            const sx = (pos.x / 100) * 210;
-            const sy = ((pos.y / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
-            try {
-              doc.addImage(step.signatureData!, 'PNG', sx, sy, sigW, sigH);
-            } catch (err) {
-              console.warn('Failed to embed extra signature on attachment', err);
-            }
-          });
-        }
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2.5 }); // High-quality rendering
 
-        // Text blocks
-        if (step.textBlock && step.textBlockX !== undefined && step.textBlockY !== undefined) {
-          const tx = (step.textBlockX / 100) * 210;
-          const ty = (step.textBlockY / 100) * 297;
-          doc.setFontSize((step.textBlockSize || 13) * 0.85);
-          doc.setFont('THSarabun', 'bold');
-          doc.setTextColor(30, 30, 30);
-          doc.text(step.textBlock, tx, ty + 2.5); // align correction
-        }
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d')!;
 
-        // Extra text blocks
-        if (step.extraTextBlocks && step.extraTextBlocks.length > 0) {
-          step.extraTextBlocks.forEach(tb => {
-            const tx = (tb.x / 100) * 210;
-            const ty = (tb.y / 100) * 297;
-            try {
-              doc.setFontSize((tb.size || 13) * 0.85);
-              doc.setFont('THSarabun', 'bold');
-              doc.setTextColor(30, 30, 30);
-              doc.text(tb.val, tx, ty + 2.5);
-            } catch (err) {
-              console.warn('Failed to embed extra text block on attachment', err);
-            }
-          });
-        }
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const pageImgData = canvas.toDataURL('image/jpeg', 0.95);
 
-        // Date blocks
-        if (step.dateBlock && step.dateX !== undefined && step.dateY !== undefined) {
-          const dx = (step.dateX / 100) * 210;
-          const dy = (step.dateY / 100) * 297;
-          doc.setFontSize(step.dateSize || 11);
-          doc.setFont('THSarabun', 'bold');
-          doc.setTextColor(30, 30, 30);
-          doc.text(step.dateBlock, dx, dy + 2.5); // align correction
-        }
+        // Add rendered page image as background (A4: 210mm x 297mm)
+        doc.addImage(pageImgData, 'JPEG', 0, 0, 210, 297);
 
-        // Checkmarks
-        if (step.checkmarkBlock && step.checkmarkX !== undefined && step.checkmarkY !== undefined) {
-          const cx = (step.checkmarkX / 100) * 210;
-          const cy = (step.checkmarkY / 100) * 297;
-          doc.setFontSize(15);
-          doc.setFont('THSarabun', 'bold');
-          doc.setTextColor(22, 101, 52); // green checkmark
-          doc.text(step.checkmarkBlock, cx, cy + 2.5); // align correction
-        }
+        // Superimpose signatures & text blocks
+        drawSignaturesAndTexts(doc, submission);
       }
     }
 
-    doc.save(`Signed_${fileName}`);
+    const outputFileName = isImage 
+      ? `Signed_${fileName.replace(/\.(jpg|jpeg|png)$/i, '')}.pdf`
+      : `Signed_${fileName}`;
+
+    doc.save(outputFileName);
     toast.success('ดาวน์โหลดแบบฟอร์มพร้อมลายเซ็นเรียบร้อยแล้ว', { id: toastId });
   } catch (err) {
-    console.error('Failed to generate signed attachment PDF', err);
+    console.error('Failed to generate signed attachment PDF/Image', err);
     toast.error('ไม่สามารถลงลายเซ็นในแบบฟอร์มแนบได้', { id: toastId });
   }
 }

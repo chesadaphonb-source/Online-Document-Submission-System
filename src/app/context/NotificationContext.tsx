@@ -171,6 +171,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
     }
 
+    // ตรวจสอบว่าเป็นสภาพแวดล้อม stg หรือไม่ (ถ้าใช่ จะไม่มีการส่งแจ้งเตือนภายนอกรบกวนผู้อื่น)
+    const isStg = typeof window !== 'undefined' && window.location.hostname !== 'ku-envipaper.vercel.app';
+    if (isStg) {
+      console.log('📢 [stg Bypass] ข้ามการยิงส่งอีเมลและส่ง Google Chat ในระบบทดสอบ:', n.title);
+      return;
+    }
+
     // ส่งแจ้งเตือน Google Chat
     try {
       await fetch('/api/notify-chat', {
@@ -228,6 +235,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         action_url: n.actionUrl,
       }));
       await supabase.from('notifications').insert(rows);
+    }
+
+    // ตรวจสอบว่าเป็นสภาพแวดล้อม stg หรือไม่ (ถ้าใช่ จะไม่มีการส่งแจ้งเตือนภายนอกรบกวนผู้อื่น)
+    const isStg = typeof window !== 'undefined' && window.location.hostname !== 'ku-envipaper.vercel.app';
+    if (isStg) {
+      console.log('📢 [stg Bypass] ข้ามการยิงส่งอีเมลและส่ง Google Chat ในระบบทดสอบ:', ns.length, 'รายการ');
+      return;
     }
 
     // ส่งแจ้งเตือน Google Chat สำหรับรายการแรก
