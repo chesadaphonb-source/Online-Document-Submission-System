@@ -267,19 +267,19 @@ export function LoginPage() {
                         ℹ️ นิสิตไม่ต้องตั้งรหัสผ่าน — กรอกชื่อและรหัสนิสิตแล้วเข้าใช้งานได้เลย
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">ชื่อ-นามสกุล</label>
+                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">ชื่อ-นามสกุล <span className="text-red-500 ml-1">*</span></label>
                         <input type="text" value={studentName} onChange={e => setStudentName(e.target.value)}
                           placeholder="เช่น สมชาย ใจดี" autoFocus
                           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all"/>
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">รหัสนิสิต</label>
+                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">รหัสนิสิต <span className="text-red-500 ml-1">*</span></label>
                         <input type="text" value={studentId} onChange={e => setStudentId(e.target.value)}
                           placeholder="เช่น 6510000000"
                           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all"/>
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">ภาควิชา</label>
+                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">ภาควิชา <span className="text-red-500 ml-1">*</span></label>
                         <select value={studentDept} onChange={e => setStudentDept(e.target.value)}
                           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all bg-white">
                           <option value="">-- เลือกภาควิชา --</option>
