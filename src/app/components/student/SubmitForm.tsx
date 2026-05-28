@@ -14,11 +14,12 @@ import { toast } from 'sonner';
 interface LibraryForm {
   id: string;
   name: string;
-  description: string;
-  category: string;
-  file_url: string;
-  file_name: string;
+  description?: string;
+  category?: string;
+  file_url?: string;
+  file_name?: string;
   required_docs?: string[];
+  workflow_steps?: string[];
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
