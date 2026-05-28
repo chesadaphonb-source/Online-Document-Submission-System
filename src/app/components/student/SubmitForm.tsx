@@ -80,7 +80,7 @@ function FormDownloadSection() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800">{form.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {CATEGORY_LABELS[form.category] || form.category}
+                      {(form.category ? CATEGORY_LABELS[form.category] : '') || form.category}
                       {form.description && ` — ${form.description}`}
                     </p>
                   </div>
@@ -105,7 +105,7 @@ function FormDownloadSection() {
                   <div className="px-4 pb-3 bg-gray-50 border-t border-gray-100">
                     <p className="text-xs font-medium text-gray-600 mt-2 mb-1">วิธีการใช้งาน:</p>
                     <ol className="list-decimal list-inside space-y-1">
-                      {(FORM_INSTRUCTIONS[form.file_name] || ['ดาวน์โหลดและกรอกข้อมูลให้ครบถ้วน', 'แนบมาพร้อมกับการยื่นคำร้องออนไลน์']).map((step, i) => (
+                      {((form.file_name ? FORM_INSTRUCTIONS[form.file_name] : undefined) || ['ดาวน์โหลดและกรอกข้อมูลให้ครบถ้วน', 'แนบมาพร้อมกับการยื่นคำร้องออนไลน์']).map((step: string, i: number) => (
                         <li key={i} className="text-xs text-gray-600">{step}</li>
                       ))}
                     </ol>
@@ -396,7 +396,7 @@ export function SubmitForm() {
 
     // ── ดึงอาจารย์จาก Supabase ตาม department ของนิสิต ──
     let approvalSteps: ApprovalStep[] = [];
-    const dept = currentUser.department;
+    const dept = (currentUser as any)?.department;
 
     if (isSupabaseConfigured && supabase && dept) {
       // ถ้านิสิตเลือกอาจารย์ที่ปรึกษาเอง ใช้ตัวนั้น
@@ -505,7 +505,7 @@ export function SubmitForm() {
       studentName: currentUser.name,
       studentEmail: currentUser.email,
       department: dept || '',
-      faculty: currentUser.faculty || (currentUser as any)?.faculty || 'คณะสิ่งแวดล้อม',
+      faculty: (currentUser as any)?.faculty || 'คณะสิ่งแวดล้อม',
       status: 'submitted',
       submittedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -857,7 +857,7 @@ export function SubmitForm() {
 
               {/* Advisor picker — filter ตาม dept ที่นิสิตเลือกตอน login */}
               {displayApprovalLevels.some(l => l.role === 'อาจารย์ที่ปรึกษา') && (() => {
-                const studentDept = currentUser?.department || '';
+                const studentDept = (currentUser as any)?.department || '';
                 // ใช้ partial match เผื่อชื่อภาคใน DB กับ LoginPage ไม่ตรงทั้งหมด
                 const deptAdvisors = advisorList.filter(a => {
                   if (!a.department || !studentDept) return false;
