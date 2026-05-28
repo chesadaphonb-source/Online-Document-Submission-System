@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSubmissions } from '../../context/SubmissionsContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { PdfViewerModal } from '../shared/PdfViewerModal';
 import { SignatureAndPlaceModal } from '../shared/SignatureAndPlaceModal';
-import { generateApprovalPDF } from '../../lib/generateApprovalPDF';
+import { generateApprovalPDF, previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
 import {
   Submission, getSubmissionsForTeacher, mockTeachers, formTemplates,
   formatDateTime,
@@ -12,6 +12,7 @@ import {
 import {
   CheckCircle, XCircle, FileText, ChevronDown, ChevronUp,
   User, Calendar, Clock, CheckSquare, History, Paperclip, AlertCircle,
+  PenLine, ExternalLink, Download, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -152,13 +153,37 @@ function PendingCard({ sub, teacherId, teacherName, initialSignature }: { sub: S
   const [expanded, setExpanded] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+  const [signedPreviewOpen, setSignedPreviewOpen] = useState(false);
+  const [signedPreviewUrl, setSignedPreviewUrl] = useState<string | null>(null);
+  const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
   const { approveStep, rejectStep } = useSubmissions();
   const template = formTemplates.find(f => f.id === sub.formType);
   const hasAttachments = sub.attachments && sub.attachments.length > 0;
 
+  useEffect(() => {
+    return () => { if (signedPreviewUrl) URL.revokeObjectURL(signedPreviewUrl); };
+  }, [signedPreviewUrl]);
+
   // Check if returned by admin
   const currentStep = sub.approvalSteps.find(s => s.level === sub.currentApprovalLevel);
   const wasReturned = !!currentStep?.returnedByAdminAt;
+
+  const handleOpenSignedPreview = async () => {
+    if (!sub.attachments?.length) return;
+    const attach = sub.attachments[0];
+    setSignedPreviewLoading(true);
+    setSignedPreviewOpen(true);
+    try {
+      const url = await previewSignedAttachmentPDF(sub, attach.url, attach.name);
+      setSignedPreviewUrl(url);
+    } catch (e) {
+      console.error(e);
+      toast.error('ไม่สามารถสร้างตัวอย่างเอกสารพร้อมลายเซ็นได้');
+      setSignedPreviewOpen(false);
+    } finally {
+      setSignedPreviewLoading(false);
+    }
+  };
 
   const handleApprove = (
     comment: string,
@@ -256,6 +281,15 @@ function PendingCard({ sub, teacherId, teacherName, initialSignature }: { sub: S
               <Paperclip size={13} /> ดูเอกสารแนบ ({sub.attachments!.length})
             </button>
           )}
+          {hasAttachments && (
+            <button
+              onClick={handleOpenSignedPreview}
+              className="flex items-center gap-1.5 text-xs text-violet-700 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg transition-all"
+              title="แสดงเอกสารพร้อมลายเซ็นอาจารย์ทุกท่านที่เซ็นแล้ว"
+            >
+              <PenLine size={13} /> ดูเอกสารที่ลงลายเซ็นแล้ว
+            </button>
+          )}
           <div className="flex-1" />
           <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs transition-all">
             <CheckSquare size={14} /> พิจารณา
@@ -278,6 +312,167 @@ function PendingCard({ sub, teacherId, teacherName, initialSignature }: { sub: S
       {modalOpen && <ApprovalModal submission={sub} initialSignature={initialSignature} onApprove={handleApprove} onReject={handleReject} onClose={() => setModalOpen(false)} />}
       {pdfViewerOpen && hasAttachments && (
         <PdfViewerModal attachments={sub.attachments!} submissionName={sub.formName} studentName={sub.studentName} onClose={() => setPdfViewerOpen(false)} />
+      )}
+
+      {/* Signed Document Preview Modal */}
+      {signedPreviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-full max-w-5xl h-[92vh]">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-white shrink-0">
+              <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                <PenLine size={17} className="text-violet-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{sub.formName}</p>
+                <p className="text-xs text-gray-500">เอกสารที่ลงลายเซ็นแล้ว — {sub.studentName}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {signedPreviewUrl && (
+                  <>
+                    <a href={signedPreviewUrl} target="_blank" rel="noopener noreferrer" title="เปิดในแท็บใหม่" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                      <ExternalLink size={16} />
+                    </a>
+                    <a href={signedPreviewUrl} download={`Signed_${sub.attachments?.[0]?.name || 'document.pdf'}`} title="ดาวน์โหลด" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                      <Download size={16} />
+                    </a>
+                  </>
+                )}
+                <button onClick={() => { setSignedPreviewOpen(false); setSignedPreviewUrl(null); }} className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            {/* Body */}
+            <div className="flex-1 relative bg-gray-200">
+              {signedPreviewLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 z-10 gap-3">
+                  <div className="w-10 h-10 border-violet-200 border-t-violet-600 rounded-full animate-spin" style={{ borderWidth: 3, borderStyle: 'solid' }} />
+                  <p className="text-sm text-gray-500">กำลังประมวลผลลายเซ็น...</p>
+                  <p className="text-xs text-gray-400">อาจใช้เวลาสักครู่</p>
+                </div>
+              )}
+              {signedPreviewUrl && !signedPreviewLoading && (
+                <iframe
+                  src={`${signedPreviewUrl}#toolbar=1`}
+                  className="w-full h-full border-0"
+                  title="เอกสารที่ลงลายเซ็นแล้ว"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── History Row ───────────────────────────────────────────────
+function HistoryRow({ sub, teacherId }: { sub: Submission; teacherId: string }) {
+  const [signedPreviewOpen, setSignedPreviewOpen] = useState(false);
+  const [signedPreviewUrl, setSignedPreviewUrl] = useState<string | null>(null);
+  const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
+  const hasAttachments = sub.attachments && sub.attachments.length > 0;
+
+  useEffect(() => {
+    return () => { if (signedPreviewUrl) URL.revokeObjectURL(signedPreviewUrl); };
+  }, [signedPreviewUrl]);
+
+  const handleOpenSignedPreview = async () => {
+    if (!sub.attachments?.length) return;
+    const attach = sub.attachments[0];
+    setSignedPreviewLoading(true);
+    setSignedPreviewOpen(true);
+    try {
+      const url = await previewSignedAttachmentPDF(sub, attach.url, attach.name);
+      setSignedPreviewUrl(url);
+    } catch (e) {
+      console.error(e);
+      toast.error('ไม่สามารถสร้างตัวอย่างเอกสารพร้อมลายเซ็นได้');
+      setSignedPreviewOpen(false);
+    } finally {
+      setSignedPreviewLoading(false);
+    }
+  };
+
+  const myStep = sub.approvalSteps.find(s => s.approverId === teacherId);
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-green-100 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${myStep?.status === 'approved' ? 'bg-green-50' : 'bg-red-50'}`}>
+            {myStep?.status === 'approved' ? <CheckCircle size={16} className="text-green-600" /> : <XCircle size={16} className="text-red-600" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-800 truncate">{sub.formName}</p>
+            <p className="text-xs text-gray-500">{sub.studentName} • {myStep?.timestamp ? formatDateTime(myStep.timestamp) : '-'}</p>
+            {myStep?.comment && <p className="text-xs text-gray-400 mt-1 italic">"{myStep.comment}"</p>}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between sm:justify-end gap-2.5 mt-2 sm:mt-0 shrink-0">
+          {hasAttachments && (
+            <button
+              onClick={handleOpenSignedPreview}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-violet-700 bg-violet-50 hover:bg-violet-100 transition-all font-medium"
+              title="แสดงเอกสารพร้อมลายเซ็นอาจารย์ทุกท่านที่เซ็นแล้ว"
+            >
+              <PenLine size={13} /> ดูเอกสารที่ลงลายเซ็นแล้ว
+            </button>
+          )}
+          <StatusBadge status={sub.status} />
+        </div>
+      </div>
+
+      {/* Signed Document Preview Modal */}
+      {signedPreviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-full max-w-5xl h-[92vh]">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-white shrink-0">
+              <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                <PenLine size={17} className="text-violet-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{sub.formName}</p>
+                <p className="text-xs text-gray-500">เอกสารที่ลงลายเซ็นแล้ว — {sub.studentName}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {signedPreviewUrl && (
+                  <>
+                    <a href={signedPreviewUrl} target="_blank" rel="noopener noreferrer" title="เปิดในแท็บใหม่" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                      <ExternalLink size={16} />
+                    </a>
+                    <a href={signedPreviewUrl} download={`Signed_${sub.attachments?.[0]?.name || 'document.pdf'}`} title="ดาวน์โหลด" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                      <Download size={16} />
+                    </a>
+                  </>
+                )}
+                <button onClick={() => { setSignedPreviewOpen(false); setSignedPreviewUrl(null); }} className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            {/* Body */}
+            <div className="flex-1 relative bg-gray-200">
+              {signedPreviewLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 z-10 gap-3">
+                  <div className="w-10 h-10 border-violet-200 border-t-violet-600 rounded-full animate-spin" style={{ borderWidth: 3, borderStyle: 'solid' }} />
+                  <p className="text-sm text-gray-500">กำลังประมวลผลลายเซ็น...</p>
+                  <p className="text-xs text-gray-400">อาจใช้เวลาสักครู่</p>
+                </div>
+              )}
+              {signedPreviewUrl && !signedPreviewLoading && (
+                <iframe
+                  src={`${signedPreviewUrl}#toolbar=1`}
+                  className="w-full h-full border-0"
+                  title="เอกสารที่ลงลายเซ็นแล้ว"
+                />
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -386,22 +581,9 @@ export function ApprovalList() {
               <p className="text-gray-500 text-sm">ยังไม่มีประวัติการอนุมัติ</p>
             </div>
           ) : (
-            historyItems.map(sub => {
-              const myStep = sub.approvalSteps.find(s => s.approverId === teacherId);
-              return (
-                <div key={sub.id} className="bg-white rounded-xl border border-green-100 shadow-sm p-4 flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${myStep?.status === 'approved' ? 'bg-green-50' : 'bg-red-50'}`}>
-                    {myStep?.status === 'approved' ? <CheckCircle size={16} className="text-green-600" /> : <XCircle size={16} className="text-red-600" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800">{sub.formName}</p>
-                    <p className="text-xs text-gray-500">{sub.studentName} • {myStep?.timestamp ? formatDateTime(myStep.timestamp) : '-'}</p>
-                    {myStep?.comment && <p className="text-xs text-gray-400 mt-1 italic">"{myStep.comment}"</p>}
-                  </div>
-                  <StatusBadge status={sub.status} />
-                </div>
-              );
-            })
+            historyItems.map(sub => (
+              <HistoryRow key={sub.id} sub={sub} teacherId={teacherId} />
+            ))
           )}
         </div>
       )}

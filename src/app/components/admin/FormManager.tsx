@@ -67,7 +67,13 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     try {
       let fileUrl = '';
       if (isSupabaseConfigured && supabase) {
-        const filePath = `${Date.now()}_${file.name}`;
+        // Sanitize file name for Supabase storage path to avoid "Invalid key" errors with Thai/special characters
+        const ext = file.name.split('.').pop() || '';
+        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        const cleanBase = baseName.replace(/[^a-zA-Z0-9-_]/g, '_').replace(/^_+|_+$/g, '');
+        const safeBase = cleanBase || 'template';
+        const filePath = `${Date.now()}_${safeBase}.${ext}`;
+
         const { error: uploadError } = await supabase.storage
           .from('forms')
           .upload(filePath, file, { contentType: 'application/pdf', upsert: false });
