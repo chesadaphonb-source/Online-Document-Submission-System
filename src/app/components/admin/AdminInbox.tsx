@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateApprovalPDF, generateSignedAttachmentPDF, previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
-import { useEffect } from 'react';
 
 interface DBTeacher { id: string; name: string; department?: string; position?: string; is_advisor?: boolean; is_department_head?: boolean; is_dean?: boolean; }
 
@@ -46,7 +45,7 @@ function DeadlinePicker({ onSet }: { onSet: (date: string) => void }) {
 // ── Submission Card for Admin Inbox ───────────────────────────
 function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'teacher_rejected' | 'pending_close'; teachers: DBTeacher[] }) {
   const { currentUser } = useAuth();
-  const { adminReceive, adminForward, adminRejectFinal, adminReturnToTeacher, adminClose, adminSetDeadline, updateSubmission } = useSubmissions();
+  const { adminReceive, adminForward, adminRejectFinal, adminReturnToTeacher, adminClose, adminSetDeadline, updateSubmission, adminEditFormData } = useSubmissions();
   const [expanded, setExpanded] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [showReturnForm, setShowReturnForm] = useState(false);

@@ -135,6 +135,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: 'student',
       department: department || '',
       faculty: 'คณะสิ่งแวดล้อม',
+      studentId: studentId,
+      level: 'ปริญญาตรี',
+      year: 1,
+      phone: '',
+      academicYear: String(new Date().getFullYear() + 543),
+      advisorId: '',
     };
     setCurrentUser(guestUser);
     localStorage.setItem('ku_paper_user_id', guestUser.id);

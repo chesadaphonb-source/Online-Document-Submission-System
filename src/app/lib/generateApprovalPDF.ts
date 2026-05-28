@@ -531,7 +531,7 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
+      await page.render({ canvasContext: canvas.getContext('2d')!, viewport } as any).promise;
       doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
       drawSignaturesAndTexts(doc, submission);
     }
@@ -612,7 +612,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
         canvas.height = viewport.height;
         const ctx = canvas.getContext('2d')!;
 
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvasContext: ctx, viewport } as any).promise;
         const pageImgData = canvas.toDataURL('image/jpeg', 0.95);
 
         // Add rendered page image as background (A4: 210mm x 297mm)

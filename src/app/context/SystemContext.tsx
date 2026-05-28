@@ -35,7 +35,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
           }
         )
         .subscribe();
-      return () => { supabase.removeChannel(channel); };
+      return () => { supabase?.removeChannel(channel); };
     }
   }, []);
 
