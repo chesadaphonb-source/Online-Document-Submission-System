@@ -916,7 +916,7 @@ export function SubmitForm() {
                           const roleText = roles.length > 0 ? ` (${roles.join('/')})` : '';
                           return (
                             <option key={a.id} value={a.id}>
-                              {a.name}{roleText}{isFallback && a.department ? ` — ภาควิชา${a.department}` : ''}
+                              {a.name}{roleText}{a.department ? ` — ${a.department}` : ''}
                             </option>
                           );
                         })}
