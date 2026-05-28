@@ -5,6 +5,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { PdfViewerModal } from '../shared/PdfViewerModal';
 import { SignatureAndPlaceModal } from '../shared/SignatureAndPlaceModal';
 import { generateApprovalPDF, previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
+import { formatMoney } from '../../lib/exportUtils';
 import {
   Submission, getSubmissionsForTeacher, mockTeachers, formTemplates,
   formatDateTime,
@@ -302,7 +303,7 @@ function PendingCard({ sub, teacherId, teacherName, initialSignature }: { sub: S
               return (
                 <div key={key} className="p-2 bg-gray-50 rounded-lg">
                   <p className="text-gray-400 mb-0.5">{field?.label || key}</p>
-                  <p className="text-gray-700">{val}</p>
+                  <p className="text-gray-700">{formatMoney(val, field?.label || key)}</p>
                 </div>
               );
             })}

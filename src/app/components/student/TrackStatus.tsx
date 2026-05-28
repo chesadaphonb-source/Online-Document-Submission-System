@@ -4,6 +4,7 @@ import { useSubmissions } from '../../context/SubmissionsContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { Submission, formatDateTime, formTemplates } from '../../data/mockData';
 import { generateApprovalPDF } from '../../lib/generateApprovalPDF';
+import { formatMoney } from '../../lib/exportUtils';
 import {
   FileText, Search, ChevronDown, ChevronUp, CheckCircle,
   XCircle, Clock, Eye, MessageSquare, Calendar, AlertCircle,
@@ -324,7 +325,7 @@ function SubmissionCard({ sub }: { sub: Submission }) {
                 return (
                   <div key={key} className="flex gap-3 text-xs">
                     <span className="text-gray-500 w-36 shrink-0">{field?.label || key}:</span>
-                    <span className="text-gray-700">{val}</span>
+                    <span className="text-gray-700">{formatMoney(val, field?.label || key)}</span>
                   </div>
                 );
               })}

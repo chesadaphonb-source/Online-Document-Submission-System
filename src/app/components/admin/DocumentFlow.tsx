@@ -3,6 +3,7 @@ import { useSubmissions } from '../../context/SubmissionsContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { PdfViewerModal } from '../shared/PdfViewerModal';
 import { previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
+import { formatMoney } from '../../lib/exportUtils';
 import {
   Submission, formTemplates, formatDateTime, SubmissionStatus,
 } from '../../data/mockData';
@@ -206,10 +207,11 @@ function SubmissionRow({ sub }: { sub: Submission }) {
               <div className="grid grid-cols-2 gap-2">
                 {Object.entries(sub.formData).slice(0, 4).map(([key, val]) => {
                   const field = template?.fields.find(f => f.id === key);
+                  const formattedVal = formatMoney(val, field?.label || key);
                   return (
                     <div key={key} className="text-xs">
                       <span className="text-gray-400">{field?.label || key}: </span>
-                      <span className="text-gray-700">{val.length > 40 ? val.slice(0, 37) + '...' : val}</span>
+                      <span className="text-gray-700">{formattedVal.length > 40 ? formattedVal.slice(0, 37) + '...' : formattedVal}</span>
                     </div>
                   );
                 })}

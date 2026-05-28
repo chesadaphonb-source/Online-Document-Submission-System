@@ -41,3 +41,38 @@ export function downloadCSV(data: any[], filename: string) {
     document.body.removeChild(link);
   }
 }
+
+export function formatMoney(val: string | number, keyOrLabel?: string): string {
+  if (val === null || val === undefined) return '-';
+  const strVal = String(val).trim();
+  if (!strVal) return '-';
+
+  // Check if key or label relates to money
+  const cleanKey = (keyOrLabel || '').toLowerCase();
+  const isMoney = 
+    cleanKey.includes('fee') || 
+    cleanKey.includes('amount') || 
+    cleanKey.includes('money') || 
+    cleanKey.includes('price') || 
+    cleanKey.includes('payment') || 
+    cleanKey.includes('ชำระ') || 
+    cleanKey.includes('เงิน') || 
+    cleanKey.includes('ค่าธรรมเนียม') || 
+    cleanKey.includes('บาท') || 
+    cleanKey.includes('ราคา') || 
+    cleanKey.includes('ค่าปรับ') || 
+    cleanKey.includes('ค่าบริการ');
+
+  if (!isMoney) return strVal;
+
+  const cleanedVal = strVal.replace(/,/g, '');
+  const isNumeric = /^-?\d+(\.\d+)?$/.test(cleanedVal);
+  if (isNumeric) {
+    const num = parseFloat(cleanedVal);
+    if (!isNaN(num)) {
+      return num.toLocaleString('th-TH');
+    }
+  }
+  return strVal;
+}
+

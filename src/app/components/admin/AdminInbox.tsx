@@ -5,6 +5,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { PdfViewerModal } from '../shared/PdfViewerModal';
 import { Submission, formTemplates, formatDateTime } from '../../data/mockData';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { formatMoney } from '../../lib/exportUtils';
 import {
   Inbox, CheckCircle, XCircle, FileText, ChevronDown, ChevronUp,
   User, Calendar, AlertCircle, Send, RotateCcw, Clock, Paperclip,
@@ -460,7 +461,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
                   {editMode ? (
                     <input value={val} onChange={e => setEditedData(prev => ({ ...prev, [key]: e.target.value }))} className="w-full px-2 py-1 border border-purple-200 rounded focus:outline-none focus:border-purple-400" />
                   ) : (
-                    <p className="text-gray-700">{val}</p>
+                    <p className="text-gray-700">{formatMoney(val, field?.label || key)}</p>
                   )}
                 </div>
               );

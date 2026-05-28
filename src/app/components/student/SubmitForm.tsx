@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSubmissions } from '../../context/SubmissionsContext';
 import { formTemplates, FormTemplate, mockStudents, Submission, ApprovalStep, Attachment } from '../../data/mockData';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { formatMoney } from '../../lib/exportUtils';
 import {
   ChevronRight, ChevronLeft, Check, FileText, Upload,
   AlertCircle, Paperclip, X, Search, Save, Trash2,
@@ -345,8 +346,9 @@ export function SubmitForm() {
     try {
       for (const file of Array.from(files)) {
         if (file.size > 20 * 1024 * 1024) { toast.error(`${file.name} เกิน 20MB`); continue; }
-        const isImage = file.type.startsWith('image/');
-        const isPdf = file.type === 'application/pdf';
+        const fnLower = file.name.toLowerCase();
+        const isImage = file.type.startsWith('image/') || fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
+        const isPdf = file.type === 'application/pdf' || fnLower.endsWith('.pdf');
         if (!isPdf && !isImage) { toast.error(`${file.name} ไม่รองรับ`); continue; }
 
         const { url, name, size } = await uploadFileToSupabase(file);
@@ -852,7 +854,7 @@ export function SubmitForm() {
                   {selectedForm.fields.map(field => (
                     <div key={field.id} className="flex gap-3">
                       <span className="text-xs text-gray-500 w-40 shrink-0">{field.label}:</span>
-                      <span className="text-xs text-gray-800">{formData[field.id] || '-'}</span>
+                      <span className="text-xs text-gray-800">{formatMoney(formData[field.id] || '-', field.id || field.label)}</span>
                     </div>
                   ))}
                 </div>
