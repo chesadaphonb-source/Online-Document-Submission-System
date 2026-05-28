@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSubmissions } from '../../context/SubmissionsContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { PdfViewerModal } from '../shared/PdfViewerModal';
+import { previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
 import {
   Submission, formTemplates, formatDateTime, SubmissionStatus,
 } from '../../data/mockData';
 import {
   FileText, Search, ChevronDown, ChevronUp, User,
-  Calendar, CheckCircle, Clock, XCircle, AlertCircle, Eye, Paperclip, ShieldCheck
+  Calendar, CheckCircle, Clock, XCircle, AlertCircle, Eye, Paperclip, ShieldCheck,
+  PenLine, X, ExternalLink, Download,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // ── Approval flow mini-visualizer ─────────────────────────────
 function ApprovalFlowViewer({ sub }: { sub: Submission }) {
@@ -68,8 +71,32 @@ function ApprovalFlowViewer({ sub }: { sub: Submission }) {
 function SubmissionRow({ sub }: { sub: Submission }) {
   const [expanded, setExpanded] = useState(false);
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+  const [signedPreviewOpen, setSignedPreviewOpen] = useState(false);
+  const [signedPreviewUrl, setSignedPreviewUrl] = useState<string | null>(null);
+  const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
   const template = formTemplates.find(f => f.id === sub.formType);
   const hasAttachments = sub.attachments && sub.attachments.length > 0;
+
+  useEffect(() => {
+    return () => { if (signedPreviewUrl) URL.revokeObjectURL(signedPreviewUrl); };
+  }, [signedPreviewUrl]);
+
+  const handleOpenSignedPreview = async () => {
+    if (!sub.attachments?.length) return;
+    const attach = sub.attachments[0];
+    setSignedPreviewLoading(true);
+    setSignedPreviewOpen(true);
+    try {
+      const url = await previewSignedAttachmentPDF(sub, attach.url, attach.name);
+      setSignedPreviewUrl(url);
+    } catch (e) {
+      console.error(e);
+      toast.error('ไม่สามารถสร้างตัวอย่างเอกสารพร้อมลายเซ็นได้');
+      setSignedPreviewOpen(false);
+    } finally {
+      setSignedPreviewLoading(false);
+    }
+  };
 
   const deadlineDays = sub.deadline
     ? Math.ceil((new Date(sub.deadline).getTime() - Date.now()) / 86400000)
@@ -160,6 +187,15 @@ function SubmissionRow({ sub }: { sub: Submission }) {
               <Paperclip size={13} /> ดูเอกสาร ({sub.attachments!.length})
             </button>
           )}
+          {hasAttachments && (
+            <button
+              onClick={handleOpenSignedPreview}
+              className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-violet-700 hover:bg-violet-50 border-l border-gray-100 transition-colors shrink-0"
+              title="แสดงเอกสารพร้อมลายเซ็นอาจารย์ทุกท่านที่เซ็นแล้ว"
+            >
+              <PenLine size={13} /> ดูเอกสารที่ลงลายเซ็นแล้ว
+            </button>
+          )}
         </div>
 
         {expanded && (
@@ -188,8 +224,57 @@ function SubmissionRow({ sub }: { sub: Submission }) {
           attachments={sub.attachments!}
           submissionName={sub.formName}
           studentName={sub.studentName}
+          submission={sub}
           onClose={() => setPdfViewerOpen(false)}
         />
+      )}
+
+      {/* Signed Document Preview Modal */}
+      {signedPreviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-full max-w-5xl h-[92vh]">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-white shrink-0">
+              <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                <PenLine size={17} className="text-violet-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{sub.formName}</p>
+                <p className="text-xs text-gray-500">เอกสารที่ลงลายเซ็นแล้ว — {sub.studentName}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {signedPreviewUrl && (
+                  <>
+                    <a href={signedPreviewUrl} target="_blank" rel="noopener noreferrer" title="เปิดในแท็บใหม่" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                      <ExternalLink size={16} />
+                    </a>
+                    <a href={signedPreviewUrl} download={`Signed_${sub.attachments?.[0]?.name || 'document.pdf'}`} title="ดาวน์โหลด" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                      <Download size={16} />
+                    </a>
+                  </>
+                )}
+                <button onClick={() => { setSignedPreviewOpen(false); setSignedPreviewUrl(null); }} className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 relative bg-gray-200">
+              {signedPreviewLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 z-10 gap-3">
+                  <div className="w-10 h-10 border-violet-200 border-t-violet-600 rounded-full animate-spin" style={{ borderWidth: 3, borderStyle: 'solid' }} />
+                  <p className="text-sm text-gray-500">กำลังประมวลผลลายเซ็น...</p>
+                  <p className="text-xs text-gray-400">อาจใช้เวลาสักครู่</p>
+                </div>
+              )}
+              {signedPreviewUrl && !signedPreviewLoading && (
+                <iframe
+                  src={`${signedPreviewUrl}#toolbar=1`}
+                  className="w-full h-full border-0"
+                  title="เอกสารที่ลงลายเซ็นแล้ว"
+                />
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
