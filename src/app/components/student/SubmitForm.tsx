@@ -184,25 +184,46 @@ export function SubmitForm() {
   const [draftInfo, setDraftInfo] = useState<DraftData | null>(null);
   const [libraryForms, setLibraryForms] = useState<LibraryForm[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [advisorList, setAdvisorList] = useState<{ id: string; name: string; department?: string }[]>([]);
+  const [advisorList, setAdvisorList] = useState<{
+    id: string;
+    name: string;
+    department?: string;
+    isAdvisor?: boolean;
+    isDepartmentHead?: boolean;
+    isDean?: boolean;
+  }[]>([]);
   const [selectedAdvisorId, setSelectedAdvisorId] = useState('');
   const [isLoadingAdvisors, setIsLoadingAdvisors] = useState(true);
 
-  // โหลดรายชื่ออาจารย์ที่ปรึกษาจาก Supabase
+  // โหลดรายชื่ออาจารย์ที่ปรึกษาจาก Supabase พร้อมบทบาทหน้าที่
   // Fallback: ถ้าไม่พบอาจารย์ที่ is_advisor=true ให้โหลดอาจารย์ทั้งหมดแทน
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) { setIsLoadingAdvisors(false); return; }
-    supabase.from('teachers').select('user_id,users!inner(id,name,department)')
+    supabase.from('teachers').select('user_id,is_advisor,is_department_head,is_dean,users!inner(id,name,department)')
       .eq('is_advisor', true)
       .then(async ({ data }) => {
         if (data && data.length > 0) {
-          setAdvisorList((data as any[]).map(r => ({ id: r.users.id, name: r.users.name, department: r.users.department })));
+          setAdvisorList((data as any[]).map(r => ({
+            id: r.users.id,
+            name: r.users.name,
+            department: r.users.department,
+            isAdvisor: r.is_advisor,
+            isDepartmentHead: r.is_department_head,
+            isDean: r.is_dean,
+          })));
         } else {
           // ไม่มีอาจารย์ที่ตั้งค่า is_advisor=true → ดึงอาจารย์ทุกคนเป็น fallback
           const { data: all } = await supabase!
-            .from('teachers').select('user_id,users!inner(id,name,department)');
+            .from('teachers').select('user_id,is_advisor,is_department_head,is_dean,users!inner(id,name,department)');
           if (all && all.length > 0) {
-            setAdvisorList((all as any[]).map(r => ({ id: r.users.id, name: r.users.name, department: r.users.department })));
+            setAdvisorList((all as any[]).map(r => ({
+              id: r.users.id,
+              name: r.users.name,
+              department: r.users.department,
+              isAdvisor: r.is_advisor,
+              isDepartmentHead: r.is_department_head,
+              isDean: r.is_dean,
+            })));
           }
         }
         setIsLoadingAdvisors(false);
@@ -887,11 +908,18 @@ export function SubmitForm() {
                         className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
                       >
                         <option value="">— เลือกอาจารย์ที่ปรึกษา —</option>
-                        {displayList.map(a => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}{isFallback && a.department ? ` (${a.department})` : ''}
-                          </option>
-                        ))}
+                        {displayList.map(a => {
+                          const roles: string[] = [];
+                          if (a.isDean) roles.push('คณบดี');
+                          if (a.isDepartmentHead) roles.push('หัวหน้าภาควิชา');
+                          if (a.isAdvisor) roles.push('อาจารย์ที่ปรึกษา');
+                          const roleText = roles.length > 0 ? ` (${roles.join('/')})` : '';
+                          return (
+                            <option key={a.id} value={a.id}>
+                              {a.name}{roleText}{isFallback && a.department ? ` — ภาควิชา${a.department}` : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     ) : (
                       <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
