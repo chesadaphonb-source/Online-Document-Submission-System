@@ -488,6 +488,60 @@ function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
 }
 
 /**
+ * Generates the signed attachment and returns a blob URL for inline preview (does NOT download).
+ */
+export async function previewSignedAttachmentPDF(submission: Submission, attachmentUrl: string, fileName: string): Promise<string> {
+  const fnLower = fileName.toLowerCase();
+  const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  doc.addFileToVFS('THSarabun.ttf', THSarabun_Base64);
+  doc.addFont('THSarabun.ttf', 'THSarabun', 'normal');
+  doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
+
+  if (isImage) {
+    let imgDataUrl = attachmentUrl;
+    if (!attachmentUrl.startsWith('blob:') && !attachmentUrl.startsWith('data:')) {
+      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      imgDataUrl = URL.createObjectURL(blob);
+    }
+    const format = fnLower.endsWith('.png') ? 'PNG' : 'JPEG';
+    doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
+    drawSignaturesAndTexts(doc, submission);
+    if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
+  } else {
+    const pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
+    let pdfData: ArrayBuffer;
+    if (attachmentUrl.startsWith('blob:') || attachmentUrl.startsWith('data:')) {
+      const res = await fetch(attachmentUrl);
+      pdfData = await res.arrayBuffer();
+    } else {
+      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      pdfData = await res.arrayBuffer();
+    }
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
+    for (let i = 1; i <= pdf.numPages; i++) {
+      if (i > 1) doc.addPage();
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
+      drawSignaturesAndTexts(doc, submission);
+    }
+  }
+
+  const pdfBlob = doc.output('blob');
+  return URL.createObjectURL(pdfBlob);
+}
+
+/**
  * Generates the student's actual attachment (PDF or Image) with all signatures and text blocks superimposed on it.
  */
 export async function generateSignedAttachmentPDF(submission: Submission, attachmentUrl: string, fileName: string): Promise<void> {
