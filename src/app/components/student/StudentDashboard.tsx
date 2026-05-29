@@ -113,6 +113,7 @@ export function StudentDashboard() {
   const [expandedForm, setExpandedForm] = useState<string | null>(null);
   const [searchForm, setSearchForm] = useState('');
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [selectedCampus, setSelectedCampus] = useState((currentUser as any)?.campus || 'bangkhen');
 
   const download = async (form: LibraryForm) => {
     setDownloading(form.id);
@@ -132,16 +133,17 @@ export function StudentDashboard() {
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
     supabase.from('forms_library')
-      .select('id,name,description,category,file_url,file_name,required_docs')
+      .select('id,name,description,category,file_url,file_name,required_docs,campus')
       .eq('is_active', true)
-      .eq('campus', (currentUser as any)?.campus || 'bangkhen')
       .order('category')
       .then(({ data }) => { if (data) setForms(data); });
   }, [currentUser]);
 
   const filteredForms = forms.filter(f =>
-    f.name.toLowerCase().includes(searchForm.toLowerCase()) ||
-    (CATEGORY_LABELS[f.category] || '').includes(searchForm)
+    ((f.campus || 'bangkhen') === selectedCampus) && (
+      f.name.toLowerCase().includes(searchForm.toLowerCase()) ||
+      (CATEGORY_LABELS[f.category] || '').includes(searchForm)
+    )
   );
 
   return (
@@ -251,6 +253,22 @@ export function StudentDashboard() {
         </div>
 
         <div className="p-4">
+          {/* Campus Selector segmented tabs */}
+          <div className="flex bg-gray-50 border border-gray-200/80 p-1 rounded-xl w-full sm:w-fit mb-3">
+            <button onClick={() => setSelectedCampus('bangkhen')}
+              className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                selectedCampus === 'bangkhen' ? 'bg-[#1a5c2e] text-white shadow-sm' : 'text-gray-500 hover:text-green-700'
+              }`}>
+              วิทยาเขตบางเขน
+            </button>
+            <button onClick={() => setSelectedCampus('kamphaengsaen')}
+              className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                selectedCampus === 'kamphaengsaen' ? 'bg-purple-700 text-white shadow-sm' : 'text-gray-500 hover:text-purple-700'
+              }`}>
+              วิทยาเขตกำแพงแสน
+            </button>
+          </div>
+
           {/* Search */}
           <div className="relative mb-3">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

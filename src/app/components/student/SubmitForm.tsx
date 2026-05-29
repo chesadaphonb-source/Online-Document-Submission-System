@@ -185,6 +185,7 @@ export function SubmitForm() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
+  const [selectedCampus, setSelectedCampus] = useState((currentUser as any)?.campus || 'bangkhen');
   const [draftInfo, setDraftInfo] = useState<DraftData | null>(null);
   const [libraryForms, setLibraryForms] = useState<LibraryForm[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,9 +238,8 @@ export function SubmitForm() {
   // โหลด required_docs และ workflow_steps จาก library
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.from('forms_library').select('id,name,file_name,required_docs,workflow_steps')
+    supabase.from('forms_library').select('id,name,file_name,required_docs,workflow_steps,campus')
       .eq('is_active', true)
-      .eq('campus', (currentUser as any)?.campus || 'bangkhen')
       .then(({ data }) => { if (data) setLibraryForms(data); });
   }, [currentUser]);
 
@@ -302,7 +302,8 @@ export function SubmitForm() {
     const matchSearch = f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       f.nameEn.toLowerCase().includes(searchQuery.toLowerCase());
     const matchCategory = filterCategory === 'all' || f.category === filterCategory;
-    return matchSearch && matchCategory;
+    const matchCampus = (f.campus || 'bangkhen') === selectedCampus;
+    return matchSearch && matchCategory && matchCampus;
   });
 
   const validateStep1 = () => selectedForm !== null;
@@ -621,6 +622,22 @@ export function SubmitForm() {
         {currentStep === 0 && (
           <div className="p-5">
             <h3 className="text-green-800 mb-4">เลือกประเภทคำร้อง</h3>
+
+            {/* Campus selector segmented tabs */}
+            <div className="flex bg-gray-50 border border-gray-200/80 p-1 rounded-xl w-full sm:w-fit mb-4">
+              <button onClick={() => setSelectedCampus('bangkhen')}
+                className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  selectedCampus === 'bangkhen' ? 'bg-[#1a5c2e] text-white shadow-sm' : 'text-gray-500 hover:text-green-700'
+                }`}>
+                วิทยาเขตบางเขน
+              </button>
+              <button onClick={() => setSelectedCampus('kamphaengsaen')}
+                className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  selectedCampus === 'kamphaengsaen' ? 'bg-purple-700 text-white shadow-sm' : 'text-gray-500 hover:text-purple-700'
+                }`}>
+                วิทยาเขตกำแพงแสน
+              </button>
+            </div>
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

@@ -20,6 +20,7 @@ interface FormItem {
   created_at: string;
   required_docs: string[];
   workflow_steps: string[];
+  campus?: string;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -375,6 +376,11 @@ function FormCard({ form, onEdit, onDelete, onToggle }: {
               <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${CATEGORY_COLORS[form.category] || 'bg-gray-100 text-gray-600'}`}>
                 {CATEGORY_LABELS[form.category] || form.category}
               </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 font-medium ${
+                form.campus === 'kamphaengsaen' ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-green-100 text-green-700 border border-green-200'
+              }`}>
+                {form.campus === 'kamphaengsaen' ? 'กำแพงแสน' : 'บางเขน'}
+              </span>
             </div>
             {form.description && <p className="text-xs text-gray-500 mt-1">{form.description}</p>}
             <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
@@ -457,6 +463,7 @@ export function FormManager() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [filterCampus, setFilterCampus] = useState('all');
   const [showUpload, setShowUpload] = useState(false);
   const [editForm, setEditForm] = useState<FormItem | null>(null);
 
@@ -501,7 +508,8 @@ export function FormManager() {
   const filtered = forms.filter(f => {
     const matchSearch = f.name.toLowerCase().includes(search.toLowerCase());
     const matchCat = filterCategory === 'all' || f.category === filterCategory;
-    return matchSearch && matchCat;
+    const matchCampus = filterCampus === 'all' || (f.campus || 'bangkhen') === filterCampus;
+    return matchSearch && matchCat && matchCampus;
   });
 
   const categories = ['all', ...Array.from(new Set(forms.map(f => f.category)))];
@@ -531,6 +539,28 @@ export function FormManager() {
           ⚠️ ยังไม่ได้เชื่อมต่อ Supabase — ฟีเจอร์บางส่วนอาจไม่ทำงาน
         </div>
       )}
+
+      {/* Campus Segmented Tabs Filter */}
+      <div className="flex bg-gray-100 p-1 rounded-xl w-fit border border-gray-200/60 shadow-sm">
+        <button onClick={() => setFilterCampus('all')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            filterCampus === 'all' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+          }`}>
+          ทั้งหมด (ทุกวิทยาเขต)
+        </button>
+        <button onClick={() => setFilterCampus('bangkhen')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            filterCampus === 'bangkhen' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-green-700'
+          }`}>
+          วิทยาเขตบางเขน
+        </button>
+        <button onClick={() => setFilterCampus('kamphaengsaen')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            filterCampus === 'kamphaengsaen' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-purple-700'
+          }`}>
+          วิทยาเขตกำแพงแสน
+        </button>
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
