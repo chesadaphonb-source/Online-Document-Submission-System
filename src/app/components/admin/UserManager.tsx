@@ -6,6 +6,7 @@ import {
   Shield, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
 
 interface DBUser {
   id: string;
@@ -51,6 +52,7 @@ function TeacherCard({ user, onUpdate }: {
   user: DBUser;
   onUpdate: (id: string, changes: Partial<DBUser>) => void;
 }) {
+  const { currentUser } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(user.name);
@@ -58,6 +60,20 @@ function TeacherCard({ user, onUpdate }: {
   const [editPos, setEditPos] = useState(user.position || '');
   const [editPassword, setEditPassword] = useState(user.plain_password || '');
   const [saving, setSaving] = useState(false);
+
+  const promoteToAdmin = async () => {
+    if (!confirm(`ต้องการแต่งตั้ง "${user.name}" เป็นเจ้าหน้าที่ระบบ (Admin) ใช่หรือไม่?`)) return;
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from('users').update({ role: 'admin' }).eq('id', user.id);
+        if (error) throw error;
+      }
+      onUpdate(user.id, { role: 'admin' });
+      toast.success(`แต่งตั้ง "${user.name}" เป็น Admin สำเร็จ`);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -150,6 +166,18 @@ function TeacherCard({ user, onUpdate }: {
               </div>
             </div>
 
+            {currentUser?.email === 'chesadaphon.b@ku.th' && (
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                <p className="text-xs text-purple-700 font-semibold flex items-center gap-1"><Shield size={11} /> สิทธิ์ผู้ดูแลระบบ (Super Admin Only)</p>
+                <button
+                  onClick={promoteToAdmin}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold shadow-sm transition-all cursor-pointer"
+                >
+                  แต่งตั้งเป็น Admin
+                </button>
+              </div>
+            )}
+
             {/* Edit info */}
             {!editing ? (
               <button onClick={() => { setEditName(user.name); setEditDept(user.department || ''); setEditPos(user.position || ''); setEditPassword(user.plain_password || ''); setEditing(true); }}
@@ -225,6 +253,21 @@ export function UserManager() {
   const [students, setStudents] = useState<SubmittedStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const { currentUser } = useAuth();
+
+  const demoteToTeacher = async (userId: string, userName: string) => {
+    if (!confirm(`ต้องการถอดถอนสิทธิ์ Admin ของ "${userName}" กลับไปเป็นอาจารย์ปกติใช่หรือไม่?`)) return;
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from('users').update({ role: 'teacher' }).eq('id', userId);
+        if (error) throw error;
+      }
+      handleUpdate(userId, { role: 'teacher' });
+      toast.success(`ถอดถอนสิทธิ์ Admin ของ "${userName}" สำเร็จ`);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   // ── Add New Teacher States ──
   const [showAddModal, setShowAddModal] = useState(false);
@@ -444,11 +487,21 @@ export function UserManager() {
           <p className="text-xs font-semibold text-purple-700 mb-2 flex items-center gap-1.5">
             <Shield size={12} /> Admin ({admins.length} คน)
           </p>
-          <div className="space-y-1">
+          <div className="space-y-2">
             {admins.map(a => (
-              <div key={a.id} className="flex items-center gap-3 text-xs">
-                <span className="text-purple-800 font-medium">{a.name}</span>
-                <span className="text-purple-500">{a.email}</span>
+              <div key={a.id} className="flex items-center gap-3 text-xs justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-purple-800 font-medium">{a.name}</span>
+                  <span className="text-purple-500">{a.email}</span>
+                </div>
+                {currentUser?.email === 'chesadaphon.b@ku.th' && a.email !== 'chesadaphon.b@ku.th' && (
+                  <button
+                    onClick={() => demoteToTeacher(a.id, a.name)}
+                    className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-white border border-red-200 rounded px-2 py-0.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    ถอดสิทธิ์ Admin
+                  </button>
+                )}
               </div>
             ))}
           </div>
