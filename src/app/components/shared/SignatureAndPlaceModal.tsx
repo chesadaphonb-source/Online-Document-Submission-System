@@ -63,7 +63,7 @@ function usePdfPageImage(url: string | null, pageNum: number) {
         offscreen.height = viewport.height;
         const ctx = offscreen.getContext('2d')!;
 
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvasContext: ctx, viewport } as any).promise;
 
         if (!cancelled) {
           setImageUrl(offscreen.toDataURL('image/jpeg', 0.92));

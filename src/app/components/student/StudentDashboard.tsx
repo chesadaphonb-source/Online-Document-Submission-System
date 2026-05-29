@@ -19,7 +19,9 @@ interface LibraryForm {
   file_url: string;
   file_name: string;
   required_docs?: string[];
+  campus?: string;
 }
+
 
 // ดาวน์โหลดไฟล์พร้อมกำหนดชื่อภาษาไทย
 async function handleDownload(url: string, thaiName: string) {
@@ -158,9 +160,9 @@ export function StudentDashboard() {
           <p className="text-green-200 text-sm mb-0.5">ยินดีต้อนรับ</p>
           <h1 className="text-white text-xl font-semibold">{currentUser?.name}</h1>
           <p className="text-green-200 text-xs mt-0.5">รหัสนิสิต: {currentUser?.id?.replace('student_', '') || currentUser?.email?.replace('@ku.th', '')}</p>
-          {currentUser?.department && (
+          {(currentUser as any)?.department && (
             <p className="text-green-100 text-xs mt-0.5 flex items-center gap-1">
-              <span className="opacity-70">🏫</span> {currentUser.department}
+              <span className="opacity-70">🏫</span> {(currentUser as any).department}
             </p>
           )}
           <div className="flex gap-3 mt-4">
