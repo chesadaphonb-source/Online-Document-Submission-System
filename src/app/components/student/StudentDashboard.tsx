@@ -134,9 +134,10 @@ export function StudentDashboard() {
     supabase.from('forms_library')
       .select('id,name,description,category,file_url,file_name,required_docs')
       .eq('is_active', true)
+      .eq('campus', (currentUser as any)?.campus || 'bangkhen')
       .order('category')
       .then(({ data }) => { if (data) setForms(data); });
-  }, []);
+  }, [currentUser]);
 
   const filteredForms = forms.filter(f =>
     f.name.toLowerCase().includes(searchForm.toLowerCase()) ||

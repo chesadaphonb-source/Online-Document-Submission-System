@@ -33,6 +33,7 @@ export interface Student {
   phone: string;
   academicYear: string;
   advisorId: string;
+  campus?: string;
 }
 
 export interface Teacher {
@@ -46,6 +47,7 @@ export interface Teacher {
   isAdvisor?: boolean;
   isDepartmentHead?: boolean;
   isDean?: boolean;
+  campus?: string;
 }
 
 export interface Admin {
@@ -53,6 +55,7 @@ export interface Admin {
   name: string;
   email: string;
   role: 'admin';
+  campus?: string;
 }
 
 export type User = Student | Teacher | Admin;
@@ -78,6 +81,7 @@ export interface FormTemplate {
   colorClass: string;
   bgClass: string;
   iconBg: string;
+  campus?: string;
 }
 
 export interface ApprovalStep {

@@ -48,6 +48,7 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [workflowSteps, setWorkflowSteps] = useState<string[]>(['advisor', 'department_head', 'dean']);
+  const [campus, setCampus] = useState('bangkhen');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,6 +90,7 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
           file_size_bytes: file.size,
           is_active: true,
           workflow_steps: workflowSteps,
+          campus,
         });
         if (dbError) throw dbError;
       } else {
@@ -125,6 +127,14 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1.5 font-medium">วิทยาเขต</label>
+            <select value={campus} onChange={e => setCampus(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 bg-white">
+              <option value="bangkhen">วิทยาเขตบางเขน (Bang Khen)</option>
+              <option value="kamphaengsaen">วิทยาเขตกำแพงแสน (Kamphaeng Saen)</option>
             </select>
           </div>
           <div>

@@ -92,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: profile.role || 'teacher',
         department: profile.department || '',
         faculty: profile.faculty || '',
+        campus: profile.campus || 'bangkhen',
       };
 
       if (user.role === 'teacher') {
@@ -127,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Student Guest Login (ไม่ต้อง password) ────────────────
-  const loginAsStudent = (name: string, studentId: string, department?: string, studentEmail?: string): { success: boolean; user: User } => {
+  const loginAsStudent = (name: string, studentId: string, department?: string, studentEmail?: string, campus?: string): { success: boolean; user: User } => {
     const guestUser: User = {
       id: `student_${studentId}`,
       name: name.trim(),
@@ -141,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phone: '',
       academicYear: String(new Date().getFullYear() + 543),
       advisorId: '',
+      campus: campus || 'bangkhen',
     };
     setCurrentUser(guestUser);
     localStorage.setItem('ku_paper_user_id', guestUser.id);

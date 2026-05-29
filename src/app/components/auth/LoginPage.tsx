@@ -31,6 +31,7 @@ export function LoginPage() {
   const [studentId, setStudentId] = useState('');
   const [studentDept, setStudentDept] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
+  const [studentCampus, setStudentCampus] = useState('bangkhen');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [adminClicks, setAdminClicks] = useState(0);
@@ -44,13 +45,13 @@ export function LoginPage() {
     }
   }, [currentUser, authLoading, navigate]);
 
-  const resetStudent = () => { setStudentName(''); setStudentId(''); setStudentDept(''); setStudentEmail(''); };
+  const resetStudent = () => { setStudentName(''); setStudentId(''); setStudentDept(''); setStudentEmail(''); setStudentCampus('bangkhen'); };
 
   const doLogin = async () => {
     if (selectedRole?.key === 'student') {
       if (!studentName.trim() || !studentId.trim()) { toast.error('กรุณากรอกชื่อและรหัสนิสิต'); return; }
       if (!studentDept) { toast.error('กรุณาเลือกภาควิชา'); return; }
-      const result = loginAsStudent(studentName, studentId, studentDept, studentEmail);
+      const result = loginAsStudent(studentName, studentId, studentDept, studentEmail, studentCampus);
       toast.success(`ยินดีต้อนรับ, ${result.user.name}`);
       navigate('/student/dashboard'); return;
     }
@@ -277,6 +278,14 @@ export function LoginPage() {
                         <input type="text" value={studentId} onChange={e => setStudentId(e.target.value)}
                           placeholder="เช่น 6510000000"
                           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all"/>
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">วิทยาเขต <span className="text-red-500 ml-1">*</span></label>
+                        <select value={studentCampus} onChange={e => setStudentCampus(e.target.value)}
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all bg-white">
+                          <option value="bangkhen">วิทยาเขตบางเขน (Bang Khen)</option>
+                          <option value="kamphaengsaen">วิทยาเขตกำแพงแสน (Kamphaeng Saen)</option>
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-700 mb-1.5 font-medium">ภาควิชา <span className="text-red-500 ml-1">*</span></label>

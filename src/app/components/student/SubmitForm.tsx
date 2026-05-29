@@ -43,13 +43,16 @@ function FormDownloadSection() {
   const [forms, setForms] = useState<LibraryForm[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [expandedForm, setExpandedForm] = useState<string | null>(null);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
     supabase.from('forms_library').select('id,name,description,category,file_url,file_name,required_docs')
-      .eq('is_active', true).order('category')
+      .eq('is_active', true)
+      .eq('campus', (currentUser as any)?.campus || 'bangkhen')
+      .order('category')
       .then(({ data }) => { if (data) setForms(data); });
-  }, []);
+  }, [currentUser]);
 
   if (forms.length === 0) return null;
 
@@ -236,8 +239,9 @@ export function SubmitForm() {
     if (!isSupabaseConfigured || !supabase) return;
     supabase.from('forms_library').select('id,name,file_name,required_docs,workflow_steps')
       .eq('is_active', true)
+      .eq('campus', (currentUser as any)?.campus || 'bangkhen')
       .then(({ data }) => { if (data) setLibraryForms(data); });
-  }, []);
+  }, [currentUser]);
 
   const student = mockStudents.find(s => s.id === currentUser?.id);
 
