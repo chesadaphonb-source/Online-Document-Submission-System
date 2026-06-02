@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useSubmissions } from '../../context/SubmissionsContext';
+import { useAuth } from '../../context/AuthContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { PdfViewerModal } from '../shared/PdfViewerModal';
 import { previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
 import { formatMoney } from '../../lib/exportUtils';
+import { AdminAdjustSignaturesModal } from './AdminAdjustSignaturesModal';
 import {
   Submission, formTemplates, formatDateTime, SubmissionStatus,
 } from '../../data/mockData';
 import {
   FileText, Search, ChevronDown, ChevronUp, User,
   Calendar, CheckCircle, Clock, XCircle, AlertCircle, Eye, Paperclip, ShieldCheck,
-  PenLine, X, ExternalLink, Download,
+  PenLine, X, ExternalLink, Download, Move
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -75,6 +77,9 @@ function SubmissionRow({ sub }: { sub: Submission }) {
   const [signedPreviewOpen, setSignedPreviewOpen] = useState(false);
   const [signedPreviewUrl, setSignedPreviewUrl] = useState<string | null>(null);
   const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const { currentUser } = useAuth();
+  const { updateSubmission } = useSubmissions();
   const template = formTemplates.find(f => f.id === sub.formType);
   const hasAttachments = sub.attachments && sub.attachments.length > 0;
 
@@ -197,6 +202,15 @@ function SubmissionRow({ sub }: { sub: Submission }) {
               <PenLine size={13} /> ดูเอกสารที่ลงลายเซ็นแล้ว
             </button>
           )}
+          {currentUser?.email === 'chesadaphon.b@ku.th' && hasAttachments && (
+            <button
+              onClick={() => setAdjustOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-amber-700 hover:bg-amber-50 border-l border-gray-100 transition-colors shrink-0"
+              title="ปรับแก้ตำแหน่งลายเซ็นอาจารย์แต่ละท่าน (เฉพาะ Super Admin)"
+            >
+              <Move size={13} /> ปรับตำแหน่งลายเซ็น
+            </button>
+          )}
         </div>
 
         {expanded && (
@@ -277,6 +291,19 @@ function SubmissionRow({ sub }: { sub: Submission }) {
             </div>
           </div>
         </div>
+      )}
+      {adjustOpen && (
+        <AdminAdjustSignaturesModal
+          submission={sub}
+          onClose={() => setAdjustOpen(false)}
+          onSave={(updatedSteps) => {
+            updateSubmission(sub.id, { approvalSteps: updatedSteps });
+            if (signedPreviewUrl) {
+              URL.revokeObjectURL(signedPreviewUrl);
+              setSignedPreviewUrl(null);
+            }
+          }}
+        />
       )}
     </>
   );
