@@ -38,7 +38,8 @@ interface ApprovalModalProps {
     checkmarkY?: number,
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
-    extraSignaturePositions?: Array<{ x: number; y: number }>
+    extraSignaturePositions?: Array<{ x: number; y: number }>,
+    signatureSize?: number
   ) => void;
   onReject: (comment: string) => void;
   onClose: () => void;
@@ -81,8 +82,8 @@ function ApprovalModal({ submission, initialSignature, onApprove, onReject, onCl
         extraPdfUrl={generatedPdfUrl || undefined}
         extraPdfLabel="แบบฟอร์มคำร้อง (KU-Paper)"
         existingSteps={submission.approvalSteps}
-        onConfirm={(sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos) => {
-          onApprove(comment || 'อนุมัติ', sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos);
+        onConfirm={(sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize) => {
+          onApprove(comment || 'อนุมัติ', sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize);
           onClose();
         }}
         onCancel={onClose}
@@ -203,7 +204,8 @@ function PendingCard({ sub, teacherId, teacherName, initialSignature }: { sub: S
     checkmarkY?: number,
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
-    extraSignaturePositions?: Array<{ x: number; y: number }>
+    extraSignaturePositions?: Array<{ x: number; y: number }>,
+    signatureSize?: number
   ) => {
     approveStep(
       sub.id,
@@ -226,7 +228,8 @@ function PendingCard({ sub, teacherId, teacherName, initialSignature }: { sub: S
       checkmarkY,
       dateSize,
       extraTextBlocks,
-      extraSignaturePositions
+      extraSignaturePositions,
+      signatureSize
     );
     toast.success('อนุมัติคำร้องเรียบร้อยแล้ว');
   };

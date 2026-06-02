@@ -95,6 +95,7 @@ export interface ApprovalStep {
   signatureData?: string;
   signatureX?: number;  // % จากซ้าย (0-100) — ตำแหน่งแรก
   signatureY?: number;  // % จากบน (0-100) — ตำแหน่งแรก
+  signatureSize?: number; // % ขนาดของลายเซ็น
   extraSignaturePositions?: Array<{ x: number; y: number }>; // ตำแหน่งลายเซ็นเพิ่มเติม (เช่น ลงนาม 2 จุด)
   textBlock?: string;   // ข้อความเพิ่มเติมบนเอกสาร (อันแรก)
   textBlockX?: number;  // % จากซ้าย (0-100)

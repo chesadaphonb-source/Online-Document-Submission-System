@@ -121,6 +121,9 @@ export function SignaturePad({ onSave, onCancel, initialSignature }: SignaturePa
                   }}
                   penColor="#1a3fa0" // Blue pen color (ปากกาน้ำเงิน)
                   backgroundColor="rgba(249, 250, 251, 1)" // Match gray-50
+                  minWidth={0.8}
+                  maxWidth={2.0}
+                  velocityFilterWeight={0.7}
                 />
                 
                 {/* Guidelines */}

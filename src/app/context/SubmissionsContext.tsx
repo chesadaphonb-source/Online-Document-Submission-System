@@ -31,7 +31,8 @@ interface SubmissionsContextType {
     checkmarkY?: number,
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
-    extraSignaturePositions?: Array<{ x: number; y: number }>
+    extraSignaturePositions?: Array<{ x: number; y: number }>,
+    signatureSize?: number
   ) => void;
   rejectStep: (submissionId: string, level: number, approverId: string, approverName: string, comment: string) => void;
   adminReceive: (submissionId: string, adminId: string, adminName: string) => void;
@@ -299,7 +300,8 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
     checkmarkY?: number,
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
-    extraSignaturePositions?: Array<{ x: number; y: number }>
+    extraSignaturePositions?: Array<{ x: number; y: number }>,
+    signatureSize?: number
   ) => {
     const sub = submissions.find(s => s.id === submissionId);
     if (!sub) return;
@@ -316,6 +318,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
             signatureData,
             signatureX,
             signatureY,
+            signatureSize,
             extraSignaturePositions,
             textBlock,
             textBlockX,

@@ -410,15 +410,30 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
   }
 }
 
+function getImageAspectRatio(base64Data: string): Promise<number> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve(img.naturalWidth / img.naturalHeight);
+    };
+    img.onerror = () => {
+      resolve(2.85); // fallback (40 / 14)
+    };
+    img.src = base64Data;
+  });
+}
+
 /**
  * Helper to draw signatures, extra signatures, text blocks, date blocks, and checkmarks on a jsPDF page.
  */
-function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
+async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
   for (const step of submission.approvalSteps) {
     // Signatures
     if (step.signatureData && step.signatureX !== undefined && step.signatureY !== undefined) {
-      const sigW = 40; // mm
-      const sigH = 14; // mm
+      const percentWidth = step.signatureSize || 12;
+      const sigW = (percentWidth / 100) * 210;
+      const aspect = await getImageAspectRatio(step.signatureData);
+      const sigH = sigW / aspect;
       const sx = (step.signatureX / 100) * 210;
       const sy = ((step.signatureY / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
       doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
@@ -426,17 +441,20 @@ function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
 
     // Extra signatures
     if (step.signatureData && step.extraSignaturePositions && step.extraSignaturePositions.length > 0) {
-      step.extraSignaturePositions.forEach(pos => {
-        const sigW = 40; // mm
-        const sigH = 14; // mm
+      const percentWidth = step.signatureSize || 12;
+      const sigW = (percentWidth / 100) * 210;
+      const aspect = await getImageAspectRatio(step.signatureData);
+      const sigH = sigW / aspect;
+
+      for (const pos of step.extraSignaturePositions) {
         const sx = (pos.x / 100) * 210;
         const sy = ((pos.y / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
         try {
-          doc.addImage(step.signatureData!, 'PNG', sx, sy, sigW, sigH);
+          doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
         } catch (err) {
           console.warn('Failed to embed extra signature on attachment', err);
         }
-      });
+      }
     }
 
     // Text blocks
@@ -509,7 +527,7 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
     }
     const format = fnLower.endsWith('.png') ? 'PNG' : 'JPEG';
     doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
-    drawSignaturesAndTexts(doc, submission);
+    await drawSignaturesAndTexts(doc, submission);
     if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
   } else {
     const pdfjsLib = await import('pdfjs-dist');
@@ -533,7 +551,7 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
       canvas.height = viewport.height;
       await page.render({ canvasContext: canvas.getContext('2d')!, viewport } as any).promise;
       doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
-      drawSignaturesAndTexts(doc, submission);
+      await drawSignaturesAndTexts(doc, submission);
     }
   }
 
@@ -573,7 +591,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
       doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
 
       // Superimpose signatures & text blocks
-      drawSignaturesAndTexts(doc, submission);
+      await drawSignaturesAndTexts(doc, submission);
 
       if (imgDataUrl.startsWith('blob:')) {
         URL.revokeObjectURL(imgDataUrl);
@@ -619,7 +637,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
         doc.addImage(pageImgData, 'JPEG', 0, 0, 210, 297);
 
         // Superimpose signatures & text blocks
-        drawSignaturesAndTexts(doc, submission);
+        await drawSignaturesAndTexts(doc, submission);
       }
     }
 

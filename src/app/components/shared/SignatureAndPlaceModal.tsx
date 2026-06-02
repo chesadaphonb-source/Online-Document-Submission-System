@@ -108,7 +108,8 @@ interface SignatureAndPlaceModalProps {
     checkmarkY?: number,
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
-    extraSignaturePositions?: Array<{ x: number; y: number }>
+    extraSignaturePositions?: Array<{ x: number; y: number }>,
+    signatureSize?: number
   ) => void;
   onCancel: () => void;
 }
@@ -363,8 +364,8 @@ export function SignatureAndPlaceModal({
                       canvasProps={{ className: 'w-full h-40 cursor-crosshair touch-none' }}
                       penColor="#1a3fa0"
                       backgroundColor="rgba(0,0,0,0)"
-                      minWidth={1.5}
-                      maxWidth={3}
+                      minWidth={0.8}
+                      maxWidth={2.0}
                       velocityFilterWeight={0.7}
                     />
                     <div className="absolute inset-x-4 bottom-8 border-b border-gray-300 border-dashed pointer-events-none opacity-40" />
@@ -628,8 +629,8 @@ export function SignatureAndPlaceModal({
               <div className="flex flex-col items-center gap-2">
                 <div
                   ref={pageContainerRef}
-                  className="relative bg-white border border-gray-300 shadow-md select-none overflow-hidden"
-                  style={{ width: '100%', maxWidth: 560 }}
+                  className="relative bg-white border border-gray-300 shadow-md select-none overflow-hidden w-full"
+                  style={{ maxWidth: 560, aspectRatio: '1 / 1.414' }}
                 >
                   {/* PDF as image */}
                   {selectedPdf ? (
@@ -649,7 +650,7 @@ export function SignatureAndPlaceModal({
                         <img
                           src={pdfImageUrl}
                           alt="เอกสาร PDF"
-                          className="w-full h-auto block select-none pointer-events-none"
+                          className="absolute inset-0 w-full h-full block select-none pointer-events-none object-fill"
                           draggable={false}
                         />
                       )}
@@ -947,7 +948,8 @@ export function SignatureAndPlaceModal({
                 useCheckmark ? checkmarkPos.y : undefined,
                 useDate ? dateSize : undefined,
                 extras.length > 0 ? extras.map(it => ({ val: it.val, x: it.pos.x, y: it.pos.y, size: it.size })) : undefined,
-                extraSigPos
+                extraSigPos,
+                sigSize
               );
             }}
             disabled={!signatureData || tab !== 'place'}
