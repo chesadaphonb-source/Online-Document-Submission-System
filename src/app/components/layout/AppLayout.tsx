@@ -293,20 +293,25 @@ export function AppLayout({ role }: { role: 'student' | 'teacher' | 'admin' }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="bg-white border-b border-green-100 px-4 py-3 flex items-center gap-4 shrink-0 shadow-sm">
-          <button className="lg:hidden text-green-700 p-1" onClick={() => setSidebarOpen(true)}>
-            <Menu size={22} />
+        <header className="bg-white border-b border-green-100 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-3 sm:gap-4 shrink-0 shadow-sm">
+          <button
+            className="lg:hidden text-white bg-[#1a5c2e] hover:bg-[#245a34] p-2.5 rounded-xl shadow-sm transition-all active:scale-95"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="เปิดเมนู"
+          >
+            <Menu size={20} />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-green-800 text-sm font-medium hidden sm:block">ระบบส่งเอกสารออนไลน์ มหาวิทยาลัยเกษตรศาสตร์</p>
-            <p className="text-green-600 text-xs hidden sm:block">KU-Paper Online Document System</p>
+            <p className="text-green-800 text-sm font-bold sm:font-medium lg:hidden block">KU-Paper</p>
+            <p className="text-green-800 text-sm font-medium hidden lg:block">ระบบส่งเอกสารออนไลน์ มหาวิทยาลัยเกษตรศาสตร์</p>
+            <p className="text-green-600 text-xs hidden lg:block">KU-Paper Online Document System</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Bell with dropdown */}
             <div ref={notifRef} className="relative">
               <button
                 onClick={() => setNotifOpen(prev => !prev)}
-                className="relative p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+                className="relative p-2.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-xl transition-colors"
                 id="notification-bell"
               >
                 <Bell size={20} />

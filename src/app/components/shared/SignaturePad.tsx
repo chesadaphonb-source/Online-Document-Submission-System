@@ -119,7 +119,7 @@ export function SignaturePad({ onSave, onCancel, initialSignature }: SignaturePa
                   canvasProps={{
                     className: "w-full h-48 cursor-crosshair touch-none",
                   }}
-                  penColor="#0f172a" // Dark slate color for pen
+                  penColor="#1a3fa0" // Blue pen color (ปากกาน้ำเงิน)
                   backgroundColor="rgba(249, 250, 251, 1)" // Match gray-50
                 />
                 

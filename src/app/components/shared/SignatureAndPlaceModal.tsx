@@ -132,7 +132,7 @@ export function SignatureAndPlaceModal({
   // ── Placement ────────────────────────────────────────────────
   // sigPositions[0] = ตำแหน่งหลัก, sigPositions[1..] = ตำแหน่งเพิ่มเติม (เช่น ลงนาม 2 จุด)
   const [sigPositions, setSigPositions] = useState<{ x: number; y: number }[]>([{ x: 30, y: 65 }]);
-  const [sigSize, setSigSize] = useState(18);
+  const [sigSize, setSigSize] = useState(12);
 
   // Text block states — multiple draggable text annotations
   type TextItem = { val: string; pos: { x: number; y: number }; size: number };
@@ -361,8 +361,11 @@ export function SignatureAndPlaceModal({
                       ref={sigCanvas}
                       onEnd={handleDrawEnd}
                       canvasProps={{ className: 'w-full h-40 cursor-crosshair touch-none' }}
-                      penColor="#0f172a"
+                      penColor="#1a3fa0"
                       backgroundColor="rgba(0,0,0,0)"
+                      minWidth={1.5}
+                      maxWidth={3}
+                      velocityFilterWeight={0.7}
                     />
                     <div className="absolute inset-x-4 bottom-8 border-b border-gray-300 border-dashed pointer-events-none opacity-40" />
                     <div className="absolute bottom-2 left-0 right-0 text-center text-xs text-gray-400 pointer-events-none select-none">
@@ -675,7 +678,7 @@ export function SignatureAndPlaceModal({
                           style={{
                             left: `${step.signatureX}%`,
                             top: `${step.signatureY}%`,
-                            width: `18%`,
+                            width: `12%`,
                             transform: 'translateY(-2%)',
                           }}
                         />
@@ -691,7 +694,7 @@ export function SignatureAndPlaceModal({
                             style={{
                               left: `${esp.x}%`,
                               top: `${esp.y}%`,
-                              width: `18%`,
+                              width: `12%`,
                               transform: 'translateY(-2%)',
                             }}
                           />

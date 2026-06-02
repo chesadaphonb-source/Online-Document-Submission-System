@@ -16,7 +16,7 @@ export function SignaturePlacementModal({
 }: SignaturePlacementModalProps) {
   // Position as % of A4 page (0–100)
   const [pos, setPos] = useState({ x: 35, y: 70 }); // default: bottom-center area
-  const [sigSize, setSigSize] = useState(20); // width as % of page width
+  const [sigSize, setSigSize] = useState(14); // width as % of page width
   const pageRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
