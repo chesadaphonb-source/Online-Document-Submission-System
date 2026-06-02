@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import {
-  Submission, ApprovalStep, initialSubmissions, SubmissionStatus, mockAdmin
+  Submission, ApprovalStep, initialSubmissions, SubmissionStatus, mockAdmin, FormTypeId
 } from '../data/mockData';
 import { useNotifications, Notification } from './NotificationContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { generateCertificateHash } from '../lib/generateApprovalPDF';
+import { generateCertificateHash, generateAdjustedPDFBlob } from '../lib/generateApprovalPDF';
+import { toast } from 'sonner';
 
 interface SubmissionsContextType {
   submissions: Submission[];
@@ -44,6 +45,13 @@ interface SubmissionsContextType {
   adminSetDeadline: (submissionId: string, deadline: string, adminId: string, adminName: string, affectedUserIds: string[]) => void;
   studentResubmit: (submissionId: string) => void;
   getSubmissionById: (id: string) => Submission | undefined;
+  updateSignaturePositions: (
+    submissionId: string,
+    formType: FormTypeId,
+    updatedSteps: ApprovalStep[],
+    applyToAllActive: boolean,
+    adminName?: string
+  ) => Promise<void>;
 }
 
 const SubmissionsContext = createContext<SubmissionsContextType | undefined>(undefined);
@@ -77,6 +85,9 @@ function rowToSubmission(row: any): Submission {
     deadlineSetAt: row.deadline_set_at,
     revisionCount: row.revision_count || 0,
     signatureHash: row.signature_hash,
+    signatureAdjustedAt: row.signature_adjusted_at,
+    signatureAdjustedBy: row.signature_adjusted_by,
+    originalAttachmentUrl: row.original_attachment_url,
   };
 }
 
@@ -109,6 +120,9 @@ function submissionToRow(sub: Submission) {
     deadline_set_at: sub.deadlineSetAt || null,
     revision_count: sub.revisionCount || 0,
     signature_hash: sub.signatureHash || null,
+    signature_adjusted_at: sub.signatureAdjustedAt || null,
+    signature_adjusted_by: sub.signatureAdjustedBy || null,
+    original_attachment_url: sub.originalAttachmentUrl || null,
   };
 }
 
@@ -130,6 +144,9 @@ async function dbUpdate(id: string, changes: Partial<Submission>) {
   if (changes.deadlineSetAt !== undefined) row.deadline_set_at = changes.deadlineSetAt;
   if (changes.revisionCount !== undefined) row.revision_count = changes.revisionCount;
   if (changes.signatureHash !== undefined) row.signature_hash = changes.signatureHash;
+  if (changes.signatureAdjustedAt !== undefined) row.signature_adjusted_at = changes.signatureAdjustedAt;
+  if (changes.signatureAdjustedBy !== undefined) row.signature_adjusted_by = changes.signatureAdjustedBy;
+  if (changes.originalAttachmentUrl !== undefined) row.original_attachment_url = changes.originalAttachmentUrl;
   row.updated_at = new Date().toISOString();
   await supabase.from('submissions').update(row).eq('id', id);
 }
@@ -610,6 +627,127 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
     });
   }, [submissions, updateSubmission, addNotification]);
 
+  const updateSignaturePositions = useCallback(async (
+    submissionId: string,
+    formType: FormTypeId,
+    updatedSteps: ApprovalStep[],
+    applyToAllActive: boolean,
+    adminName?: string
+  ) => {
+    const now = new Date().toISOString();
+    const dbUpdates: { id: string; steps: ApprovalStep[]; extraChanges?: Partial<Submission> }[] = [];
+
+    // ── Step 1: Update approvalSteps in state ──────────────────
+    const nextSubmissions = submissions.map(s => {
+      if (s.id === submissionId) {
+        const extraChanges: Partial<Submission> = {
+          signatureAdjustedAt: now,
+          signatureAdjustedBy: adminName || 'Super Admin',
+          // Save original attachment URL on first adjustment
+          originalAttachmentUrl: s.originalAttachmentUrl || s.attachments?.[0]?.url,
+        };
+        dbUpdates.push({ id: s.id, steps: updatedSteps, extraChanges });
+        return { ...s, approvalSteps: updatedSteps, updatedAt: now, ...extraChanges };
+      }
+      if (applyToAllActive && s.formType === formType && s.status !== 'approved' && s.status !== 'rejected') {
+        const newSteps = s.approvalSteps.map(step => {
+          const matchingUpdatedStep = updatedSteps.find(us => us.level === step.level);
+          if (!matchingUpdatedStep) return step;
+          return {
+            ...step,
+            signatureX: matchingUpdatedStep.signatureX,
+            signatureY: matchingUpdatedStep.signatureY,
+            signatureSize: matchingUpdatedStep.signatureSize,
+            extraSignaturePositions: matchingUpdatedStep.extraSignaturePositions,
+            checkmarkBlock: matchingUpdatedStep.checkmarkBlock,
+            checkmarkX: matchingUpdatedStep.checkmarkX,
+            checkmarkY: matchingUpdatedStep.checkmarkY,
+            checkmarkSize: matchingUpdatedStep.checkmarkSize,
+            dateBlock: matchingUpdatedStep.dateBlock,
+            dateX: matchingUpdatedStep.dateX,
+            dateY: matchingUpdatedStep.dateY,
+            dateSize: matchingUpdatedStep.dateSize,
+            textBlock: matchingUpdatedStep.textBlock,
+            textBlockX: matchingUpdatedStep.textBlockX,
+            textBlockY: matchingUpdatedStep.textBlockY,
+          };
+        });
+        dbUpdates.push({ id: s.id, steps: newSteps });
+        return { ...s, approvalSteps: newSteps, updatedAt: now };
+      }
+      return s;
+    });
+
+    setSubmissions(nextSubmissions);
+
+    // ── Step 2: Persist approvalSteps to DB ────────────────────
+    for (const { id, steps, extraChanges } of dbUpdates) {
+      await dbUpdate(id, { approvalSteps: steps, ...(extraChanges || {}) });
+    }
+
+    // ── Step 3: Generate adjusted PDF and upload to Supabase Storage ──
+    const targetSub = nextSubmissions.find(s => s.id === submissionId);
+    if (targetSub && targetSub.attachments && targetSub.attachments.length > 0) {
+      const attach = targetSub.attachments[0];
+      // Use the original attachment URL for regeneration (not an already-adjusted one)
+      const sourceUrl = targetSub.originalAttachmentUrl || attach.url;
+      const toastId = toast.loading('กำลังสร้างเอกสารใหม่พร้อมลายเซ็นที่ปรับตำแหน่งแล้ว...');
+      try {
+        const pdfBlob = await generateAdjustedPDFBlob(targetSub, sourceUrl, attach.name);
+
+        // Upload to Supabase Storage if configured
+        if (isSupabaseConfigured && supabase) {
+          const storagePath = `submissions/${submissionId}/adjusted_${Date.now()}.pdf`;
+          const { error: uploadError } = await supabase.storage
+            .from('attachments')
+            .upload(storagePath, pdfBlob, {
+              contentType: 'application/pdf',
+              upsert: true,
+            });
+
+          if (uploadError) {
+            console.error('Upload error:', uploadError);
+            toast.error('อัปโหลดเอกสารที่ปรับแก้ไม่สำเร็จ', { id: toastId });
+            return;
+          }
+
+          // Get public URL
+          const { data: urlData } = supabase.storage
+            .from('attachments')
+            .getPublicUrl(storagePath);
+
+          const newUrl = urlData.publicUrl + `?t=${Date.now()}`;
+
+          // Update the attachment URL in submission state
+          const updatedAttachments = [{ ...attach, url: newUrl, name: attach.name.replace(/\.[^.]+$/, '.pdf') }, ...targetSub.attachments.slice(1)];
+
+          setSubmissions(prev => prev.map(s =>
+            s.id === submissionId
+              ? { ...s, attachments: updatedAttachments, updatedAt: new Date().toISOString() }
+              : s
+          ));
+
+          await dbUpdate(submissionId, { attachments: updatedAttachments });
+          toast.success('สร้างเอกสารใหม่และอัปโหลดเรียบร้อยแล้ว', { id: toastId });
+        } else {
+          // No Supabase — create blob URL for local preview
+          const blobUrl = URL.createObjectURL(pdfBlob);
+          const updatedAttachments = [{ ...attach, url: blobUrl, name: attach.name.replace(/\.[^.]+$/, '.pdf') }, ...targetSub.attachments.slice(1)];
+
+          setSubmissions(prev => prev.map(s =>
+            s.id === submissionId
+              ? { ...s, attachments: updatedAttachments, updatedAt: new Date().toISOString() }
+              : s
+          ));
+          toast.success('สร้างเอกสารใหม่เรียบร้อยแล้ว (โหมดทดสอบ)', { id: toastId });
+        }
+      } catch (err) {
+        console.error('Failed to generate adjusted PDF:', err);
+        toast.error('ไม่สามารถสร้างเอกสารที่ปรับแก้ได้', { id: toastId });
+      }
+    }
+  }, [submissions]);
+
   const getSubmissionById = useCallback((id: string) =>
     submissions.find(s => s.id === id), [submissions]
   );
@@ -620,6 +758,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
       approveStep, rejectStep,
       adminReceive, adminForward, adminRejectFinal, adminReturnToTeacher, adminClose, adminEditFormData, adminSetDeadline,
       studentResubmit,
+      updateSignaturePositions,
       getSubmissionById,
     }}>
       {children}

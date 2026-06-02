@@ -352,12 +352,14 @@ export function SubmitForm() {
       for (const file of Array.from(files)) {
         if (file.size > 20 * 1024 * 1024) { toast.error(`${file.name} เกิน 20MB`); continue; }
         const fnLower = file.name.toLowerCase();
-        const isImage = file.type.startsWith('image/') || fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
         const isPdf = file.type === 'application/pdf' || fnLower.endsWith('.pdf');
-        if (!isPdf && !isImage) { toast.error(`${file.name} ไม่รองรับ`); continue; }
+        if (!isPdf) { 
+          toast.error(`ไฟล์ ${file.name} ไม่รองรับ ระบบอนุญาตให้แนบเฉพาะไฟล์ PDF (.pdf) เท่านั้น`); 
+          continue; 
+        }
 
         const { url, name, size } = await uploadFileToSupabase(file);
-        const att: Attachment = { name, url, type: isPdf ? 'pdf' : 'image', size };
+        const att: Attachment = { name, url, type: 'pdf', size };
         setAttachments(prev => [...prev, att]);
         toast.success(`เพิ่ม ${name} สำเร็จ`);
       }
@@ -781,13 +783,24 @@ export function SubmitForm() {
         {currentStep === 2 && (
           <div className="p-5">
             <h3 className="text-green-800 mb-1">แนบเอกสารประกอบ</h3>
-            <p className="text-gray-500 text-sm mb-4">แนบเอกสารหลักฐานประกอบคำร้อง (PDF, JPG, PNG, สูงสุด 20MB/ไฟล์)</p>
+            <p className="text-gray-500 text-sm mb-4">แนบเอกสารหลักฐานประกอบคำร้อง (เฉพาะไฟล์ PDF, สูงสุด 20MB/ไฟล์)</p>
+
+            {/* Instruction Manual / Naming Guideline */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+              <p className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5">
+                💡 คู่มือการส่งเอกสารและตั้งชื่อไฟล์:
+              </p>
+              <ul className="list-disc list-inside text-xs text-blue-800 space-y-1">
+                <li>ระบบบังคับให้ส่งเอกสารเฉพาะไฟล์ <strong>PDF (.pdf)</strong> เท่านั้น</li>
+                <li><strong>ข้อสำคัญ:</strong> กรุณาตั้งชื่อไฟล์ให้ตรงตามชื่อแบบฟอร์มคำร้อง (เช่น <code>{selectedForm?.name || 'KU1-Registration-Form'}.pdf</code>) เพื่อให้ระบบจดจำตำแหน่งและประมวลผลลายเซ็นได้ถูกต้อง</li>
+              </ul>
+            </div>
 
             {/* Required Docs hint */}
             {selectedRequiredDocs.length > 0 && (
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                 <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
-                  <Paperclip size={12} /> เอกสารที่ต้องแนบมาด้วย:
+                  <Paperclip size={12} /> เอกสารประกอบเพิ่มเติมที่ต้องแนบมาด้วย:
                 </p>
                 <ul className="space-y-1">
                   {selectedRequiredDocs.map((doc, i) => (
@@ -805,7 +818,7 @@ export function SubmitForm() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.jpg,.jpeg,.png"
+              accept=".pdf"
               onChange={handleFileSelected}
               className="hidden"
             />
@@ -824,7 +837,7 @@ export function SubmitForm() {
                 <>
                   <Upload size={32} className="mx-auto text-green-400 mb-3" />
                   <p className="text-sm text-gray-600 mb-1">คลิกเพื่ออัปโหลดไฟล์</p>
-                  <p className="text-xs text-gray-400">รองรับ PDF, JPG, PNG (สูงสุด 20MB/ไฟล์)</p>
+                  <p className="text-xs text-gray-400">รองรับเฉพาะไฟล์ PDF (สูงสุด 20MB)</p>
                 </>
               )}
             </div>

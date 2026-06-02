@@ -111,6 +111,7 @@ export interface ApprovalStep {
   checkmarkBlock?: string;
   checkmarkX?: number;
   checkmarkY?: number;
+  checkmarkSize?: number;  // ขนาดเครื่องหมายถูก (px) — ค่าเริ่มต้น 15
   // Substitute / reassign fields
   isSubstitute?: boolean;        // ถูกแต่งตั้งโดย Admin
   previousApproverId?: string;   // approver เดิมก่อนเปลี่ยน
@@ -159,6 +160,10 @@ export interface Submission {
   previousSubmissionId?: string; // อ้างอิงจาก submission เดิม
   // Security
   signatureHash?: string;        // SHA-256 Digital Signature hash
+  // Signature adjustment by Super Admin
+  signatureAdjustedAt?: string;       // เวลาที่ Super Admin ปรับลายเซ็น
+  signatureAdjustedBy?: string;       // ชื่อ Super Admin ที่ปรับ
+  originalAttachmentUrl?: string;     // URL ไฟล์ต้นฉบับของนิสิต (ก่อนปรับ)
 }
 
 // ============================================================

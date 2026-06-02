@@ -679,7 +679,7 @@ export function SignatureAndPlaceModal({
                           style={{
                             left: `${step.signatureX}%`,
                             top: `${step.signatureY}%`,
-                            width: `12%`,
+                            width: `${step.signatureSize || 12}%`,
                             transform: 'translateY(-2%)',
                           }}
                         />
@@ -695,7 +695,7 @@ export function SignatureAndPlaceModal({
                             style={{
                               left: `${esp.x}%`,
                               top: `${esp.y}%`,
-                              width: `12%`,
+                              width: `${step.signatureSize || 12}%`,
                               transform: 'translateY(-2%)',
                             }}
                           />

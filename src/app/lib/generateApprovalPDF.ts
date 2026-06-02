@@ -66,6 +66,8 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
   doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
   doc.addFont('THSarabun.ttf', 'THSarabun', 'italic');
 
+  const PAGE_W = 210;
+  const PAGE_H = 297;
   const LM = 20; // left margin
   const RM = 190; // right margin
   const W = RM - LM;   // content width
@@ -208,7 +210,8 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
   // ── APPROVAL CHAIN ──────────────────────────────────────────────
   sectionTitle(`${Object.keys(submission.formData).length > 0 ? '4' : '3'}. APPROVAL CHAIN (Sen Thang Kan Anumat)`);
 
-  submission.approvalSteps.forEach((step, i) => {
+  for (let i = 0; i < submission.approvalSteps.length; i++) {
+    const step = submission.approvalSteps[i];
     const stepStatusColor = step.status === 'approved'
       ? [22, 163, 74]
       : step.status === 'rejected'
@@ -245,18 +248,21 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
     if (step.signatureData) {
       try {
         // A4 page: 210mm wide × 297mm tall. LM=20, usable width=170
-        const PAGE_W = 210;
-        const PAGE_H = 297;
         if (step.signatureX !== undefined && step.signatureY !== undefined) {
           // Custom position (drag-and-drop) — use % of page
-          const sigW = 40; // mm width
-          const sigH = 14; // mm height
+          const percentWidth = step.signatureSize || 12;
+          const sigW = (percentWidth / 100) * PAGE_W;
+          const aspect = await getImageAspectRatio(step.signatureData);
+          const sigH = sigW / aspect;
           const sx = (step.signatureX / 100) * PAGE_W;
           const sy = (step.signatureY / 100) * PAGE_H;
           doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
         } else {
           // Default: inline with approval step row
-          doc.addImage(step.signatureData, 'PNG', LM + 60, y - 4, 30, 10);
+          const aspect = await getImageAspectRatio(step.signatureData);
+          const sigW = 30;
+          const sigH = sigW / aspect;
+          doc.addImage(step.signatureData, 'PNG', LM + 60, y - 4, sigW, sigH);
         }
       } catch (e) {
         console.warn('Failed to embed signature', e);
@@ -265,33 +271,33 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
 
     // Draw extra signatures
     if (step.signatureData && step.extraSignaturePositions && step.extraSignaturePositions.length > 0) {
-      step.extraSignaturePositions.forEach(pos => {
+      const percentWidth = step.signatureSize || 12;
+      const sigW = (percentWidth / 100) * PAGE_W;
+      const aspect = await getImageAspectRatio(step.signatureData);
+      const sigH = sigW / aspect;
+
+      for (const pos of step.extraSignaturePositions) {
         try {
-          const PAGE_W = 210;
-          const PAGE_H = 297;
-          const sigW = 40;
-          const sigH = 14;
           const sx = (pos.x / 100) * PAGE_W;
           const sy = (pos.y / 100) * PAGE_H;
-          doc.addImage(step.signatureData!, 'PNG', sx, sy, sigW, sigH);
+          doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
         } catch (e) {
           console.warn('Failed to embed extra signature', e);
         }
-      });
+      }
     }
 
     // Draw Text Block (transparent text annotation)
     if (step.textBlock && step.textBlockX !== undefined && step.textBlockY !== undefined) {
       try {
-        const PAGE_W = 210;
-        const PAGE_H = 297;
         const tx = (step.textBlockX / 100) * PAGE_W;
         const ty = (step.textBlockY / 100) * PAGE_H;
+        const fontSize = (step.textBlockSize || 13) * 0.85;
         
-        doc.setFontSize((step.textBlockSize || 13) * 0.85);
+        doc.setFontSize(fontSize);
         doc.setFont('THSarabun', 'bold');
         doc.setTextColor(30, 30, 30);
-        doc.text(step.textBlock, tx, ty + 2.5); // vertical offset correction
+        doc.text(step.textBlock, tx, ty + (fontSize * 0.27)); // dynamic baseline offset
       } catch (e) {
         console.warn('Failed to embed text block', e);
       }
@@ -301,14 +307,13 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
     if (step.extraTextBlocks && step.extraTextBlocks.length > 0) {
       step.extraTextBlocks.forEach(tb => {
         try {
-          const PAGE_W = 210;
-          const PAGE_H = 297;
           const tx = (tb.x / 100) * PAGE_W;
           const ty = (tb.y / 100) * PAGE_H;
-          doc.setFontSize((tb.size || 13) * 0.85);
+          const fontSize = (tb.size || 13) * 0.85;
+          doc.setFontSize(fontSize);
           doc.setFont('THSarabun', 'bold');
           doc.setTextColor(30, 30, 30);
-          doc.text(tb.val, tx, ty + 2.5);
+          doc.text(tb.val, tx, ty + (fontSize * 0.27)); // dynamic baseline offset
         } catch (e) {
           console.warn('Failed to embed extra text block', e);
         }
@@ -334,7 +339,7 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
     }
 
     y += step.approverName ? 12 : 8;
-  });
+  }
 
   y += 3;
   drawHr(doc, y);
@@ -427,7 +432,9 @@ function getImageAspectRatio(base64Data: string): Promise<number> {
  * Helper to draw signatures, extra signatures, text blocks, date blocks, and checkmarks on a jsPDF page.
  */
 async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
+  console.log('[DEBUG] drawSignaturesAndTexts for submission:', submission.id);
   for (const step of submission.approvalSteps) {
+    console.log(`[DEBUG] Step level ${step.level}: signatureX=${step.signatureX}, signatureY=${step.signatureY}, size=${step.signatureSize}, checkmarkX=${step.checkmarkX}, checkmarkY=${step.checkmarkY}`);
     // Signatures
     if (step.signatureData && step.signatureX !== undefined && step.signatureY !== undefined) {
       const percentWidth = step.signatureSize || 12;
@@ -435,7 +442,7 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
       const aspect = await getImageAspectRatio(step.signatureData);
       const sigH = sigW / aspect;
       const sx = (step.signatureX / 100) * 210;
-      const sy = ((step.signatureY / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
+      const sy = (step.signatureY / 100) * 297; // exact drag position
       doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
     }
 
@@ -448,7 +455,7 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
 
       for (const pos of step.extraSignaturePositions) {
         const sx = (pos.x / 100) * 210;
-        const sy = ((pos.y / 100) * 297) - 3.0; // Shift up by 3mm to align perfectly above dotted lines
+        const sy = (pos.y / 100) * 297; // exact drag position
         try {
           doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
         } catch (err) {
@@ -461,10 +468,11 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
     if (step.textBlock && step.textBlockX !== undefined && step.textBlockY !== undefined) {
       const tx = (step.textBlockX / 100) * 210;
       const ty = (step.textBlockY / 100) * 297;
-      doc.setFontSize((step.textBlockSize || 13) * 0.85);
+      const fontSize = (step.textBlockSize || 13) * 0.85;
+      doc.setFontSize(fontSize);
       doc.setFont('THSarabun', 'bold');
       doc.setTextColor(30, 30, 30);
-      doc.text(step.textBlock, tx, ty + 2.5); // align correction
+      doc.text(step.textBlock, tx, ty + (fontSize * 0.27)); // dynamic baseline offset
     }
 
     // Extra text blocks
@@ -472,11 +480,12 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
       step.extraTextBlocks.forEach(tb => {
         const tx = (tb.x / 100) * 210;
         const ty = (tb.y / 100) * 297;
+        const fontSize = (tb.size || 13) * 0.85;
         try {
-          doc.setFontSize((tb.size || 13) * 0.85);
+          doc.setFontSize(fontSize);
           doc.setFont('THSarabun', 'bold');
           doc.setTextColor(30, 30, 30);
-          doc.text(tb.val, tx, ty + 2.5);
+          doc.text(tb.val, tx, ty + (fontSize * 0.27)); // dynamic baseline offset
         } catch (err) {
           console.warn('Failed to embed extra text block on attachment', err);
         }
@@ -487,20 +496,22 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
     if (step.dateBlock && step.dateX !== undefined && step.dateY !== undefined) {
       const dx = (step.dateX / 100) * 210;
       const dy = (step.dateY / 100) * 297;
-      doc.setFontSize(step.dateSize || 11);
+      const fontSize = step.dateSize || 11;
+      doc.setFontSize(fontSize);
       doc.setFont('THSarabun', 'bold');
       doc.setTextColor(30, 30, 30);
-      doc.text(step.dateBlock, dx, dy + 2.5); // align correction
+      doc.text(step.dateBlock, dx, dy + (fontSize * 0.27)); // dynamic baseline offset
     }
 
     // Checkmarks
     if (step.checkmarkBlock && step.checkmarkX !== undefined && step.checkmarkY !== undefined) {
       const cx = (step.checkmarkX / 100) * 210;
       const cy = (step.checkmarkY / 100) * 297;
-      doc.setFontSize(15);
+      const fontSize = step.checkmarkSize || 15;
+      doc.setFontSize(fontSize);
       doc.setFont('THSarabun', 'bold');
       doc.setTextColor(22, 101, 52); // green checkmark
-      doc.text(step.checkmarkBlock, cx, cy + 2.5); // align correction
+      doc.text(step.checkmarkBlock, cx, cy + (fontSize * 0.27)); // dynamic baseline offset
     }
   }
 }
@@ -509,6 +520,7 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
  * Generates the signed attachment and returns a blob URL for inline preview (does NOT download).
  */
 export async function previewSignedAttachmentPDF(submission: Submission, attachmentUrl: string, fileName: string): Promise<string> {
+  const sourceUrl = submission.originalAttachmentUrl || attachmentUrl;
   const fnLower = fileName.toLowerCase();
   const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
 
@@ -518,9 +530,9 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
   doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
 
   if (isImage) {
-    let imgDataUrl = attachmentUrl;
-    if (!attachmentUrl.startsWith('blob:') && !attachmentUrl.startsWith('data:')) {
-      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+    let imgDataUrl = sourceUrl;
+    if (!sourceUrl.startsWith('blob:') && !sourceUrl.startsWith('data:')) {
+      const res = await fetch(sourceUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       imgDataUrl = URL.createObjectURL(blob);
@@ -533,11 +545,11 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
     const pdfjsLib = await import('pdfjs-dist');
     pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
     let pdfData: ArrayBuffer;
-    if (attachmentUrl.startsWith('blob:') || attachmentUrl.startsWith('data:')) {
-      const res = await fetch(attachmentUrl);
+    if (sourceUrl.startsWith('blob:') || sourceUrl.startsWith('data:')) {
+      const res = await fetch(sourceUrl);
       pdfData = await res.arrayBuffer();
     } else {
-      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+      const res = await fetch(sourceUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       pdfData = await res.arrayBuffer();
     }
@@ -565,6 +577,7 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
 export async function generateSignedAttachmentPDF(submission: Submission, attachmentUrl: string, fileName: string): Promise<void> {
   const toastId = toast.loading('กำลังประมวลผลและวาดลายเซ็นลงบนแบบฟอร์มคำร้อง...');
   try {
+    const sourceUrl = submission.originalAttachmentUrl || attachmentUrl;
     const fnLower = fileName.toLowerCase();
     const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
 
@@ -578,9 +591,9 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
     if (isImage) {
       // ── IMAGE FLOW ──
       // Fetch image bytes to avoid CORS
-      let imgDataUrl = attachmentUrl;
-      if (!attachmentUrl.startsWith('blob:') && !attachmentUrl.startsWith('data:')) {
-        const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+      let imgDataUrl = sourceUrl;
+      if (!sourceUrl.startsWith('blob:') && !sourceUrl.startsWith('data:')) {
+        const res = await fetch(sourceUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         imgDataUrl = URL.createObjectURL(blob);
@@ -605,11 +618,11 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
       ).href;
 
       let pdfData: ArrayBuffer;
-      if (attachmentUrl.startsWith('blob:') || attachmentUrl.startsWith('data:')) {
-        const res = await fetch(attachmentUrl);
+      if (sourceUrl.startsWith('blob:') || sourceUrl.startsWith('data:')) {
+        const res = await fetch(sourceUrl);
         pdfData = await res.arrayBuffer();
       } else {
-        const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+        const res = await fetch(sourceUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         pdfData = await res.arrayBuffer();
       }
@@ -651,4 +664,71 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
     console.error('Failed to generate signed attachment PDF/Image', err);
     toast.error('ไม่สามารถลงลายเซ็นในแบบฟอร์มแนบได้', { id: toastId });
   }
+}
+
+/**
+ * Generates a signed PDF Blob (does NOT download or save).
+ * Used by Super Admin to generate an adjusted PDF that gets uploaded back to Supabase Storage.
+ * @param submission - The submission with UPDATED approvalSteps (already adjusted positions)
+ * @param attachmentUrl - URL to the original student attachment (PDF or image)
+ * @param fileName - Original filename to determine PDF vs image handling
+ * @returns Blob of the generated PDF
+ */
+export async function generateAdjustedPDFBlob(
+  submission: Submission,
+  attachmentUrl: string,
+  fileName: string,
+): Promise<Blob> {
+  const fnLower = fileName.toLowerCase();
+  const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  doc.addFileToVFS('THSarabun.ttf', THSarabun_Base64);
+  doc.addFont('THSarabun.ttf', 'THSarabun', 'normal');
+  doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
+
+  if (isImage) {
+    let imgDataUrl = attachmentUrl;
+    if (!attachmentUrl.startsWith('blob:') && !attachmentUrl.startsWith('data:')) {
+      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      imgDataUrl = URL.createObjectURL(blob);
+    }
+    const format = fnLower.endsWith('.png') ? 'PNG' : 'JPEG';
+    doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
+    await drawSignaturesAndTexts(doc, submission);
+    if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
+  } else {
+    const pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.min.mjs',
+      import.meta.url,
+    ).href;
+
+    let pdfData: ArrayBuffer;
+    if (attachmentUrl.startsWith('blob:') || attachmentUrl.startsWith('data:')) {
+      const res = await fetch(attachmentUrl);
+      pdfData = await res.arrayBuffer();
+    } else {
+      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      pdfData = await res.arrayBuffer();
+    }
+
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
+    for (let i = 1; i <= pdf.numPages; i++) {
+      if (i > 1) doc.addPage();
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d')!, viewport } as any).promise;
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
+      await drawSignaturesAndTexts(doc, submission);
+    }
+  }
+
+  return doc.output('blob');
 }

@@ -79,7 +79,7 @@ function SubmissionRow({ sub }: { sub: Submission }) {
   const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const { currentUser } = useAuth();
-  const { updateSubmission } = useSubmissions();
+  const { updateSubmission, updateSignaturePositions } = useSubmissions();
   const template = formTemplates.find(f => f.id === sub.formType);
   const hasAttachments = sub.attachments && sub.attachments.length > 0;
 
@@ -144,6 +144,11 @@ function SubmissionRow({ sub }: { sub: Submission }) {
                     )}
                     {sub.referenceNumber && (
                       <span className="text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full font-mono">{sub.referenceNumber}</span>
+                    )}
+                    {sub.signatureAdjustedAt && (
+                      <span className="text-xs bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full flex items-center gap-1" title={`ปรับโดย ${sub.signatureAdjustedBy || 'Super Admin'} เมื่อ ${formatDateTime(sub.signatureAdjustedAt)}`}>
+                        <Move size={9} /> ปรับลายเซ็นแล้ว
+                      </span>
                     )}
                   </div>
                 </div>
@@ -296,8 +301,8 @@ function SubmissionRow({ sub }: { sub: Submission }) {
         <AdminAdjustSignaturesModal
           submission={sub}
           onClose={() => setAdjustOpen(false)}
-          onSave={(updatedSteps) => {
-            updateSubmission(sub.id, { approvalSteps: updatedSteps });
+          onSave={async (updatedSteps, applyToAllActive) => {
+            await updateSignaturePositions(sub.id, sub.formType, updatedSteps, applyToAllActive, currentUser?.name || currentUser?.email || 'Super Admin');
             if (signedPreviewUrl) {
               URL.revokeObjectURL(signedPreviewUrl);
               setSignedPreviewUrl(null);

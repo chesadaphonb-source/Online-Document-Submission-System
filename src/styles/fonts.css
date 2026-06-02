@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800&display=swap');
+
+@font-face {
+  font-family: 'THSarabun';
+  font-style: normal;
+  font-weight: normal;
+  src: local('Sarabun'), local('TH Sarabun New'), local('TH Sarabun PSK'), url('https://fonts.gstatic.com/s/sarabun/v14/DtVkJx1ILp7tzdH4x-4y77w.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'THSarabun';
+  font-style: normal;
+  font-weight: bold;
+  src: local('Sarabun Bold'), local('TH Sarabun New Bold'), local('TH Sarabun PSK Bold'), url('https://fonts.gstatic.com/s/sarabun/v14/DtVkJx1ILp7tzdH4x-4y77w.woff2') format('woff2');
+}

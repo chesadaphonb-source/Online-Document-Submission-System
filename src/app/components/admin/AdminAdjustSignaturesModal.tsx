@@ -77,7 +77,7 @@ function usePdfPageImage(url: string | null, pageNum: number) {
 interface AdminAdjustSignaturesModalProps {
   submission: Submission;
   onClose: () => void;
-  onSave: (updatedSteps: ApprovalStep[]) => void;
+  onSave: (updatedSteps: ApprovalStep[], applyToAllActive: boolean) => void | Promise<void>;
 }
 
 interface DraggableItem {
@@ -93,6 +93,8 @@ export function AdminAdjustSignaturesModal({
 }: AdminAdjustSignaturesModalProps) {
   const [pageNum, setPageNum] = useState(1);
   const [steps, setSteps] = useState<ApprovalStep[]>(() => JSON.parse(JSON.stringify(submission.approvalSteps)));
+  const [applyToAllActive, setApplyToAllActive] = useState(true);
+  const [saving, setSaving] = useState(false);
   
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -100,7 +102,8 @@ export function AdminAdjustSignaturesModal({
   const draggingItem = useRef<DraggableItem | null>(null);
 
   const attach = submission.attachments?.[0];
-  const { imageUrl, numPages, loading: pdfLoading, error: pdfError } = usePdfPageImage(attach?.url || null, pageNum);
+  const sourceUrl = submission.originalAttachmentUrl || attach?.url || null;
+  const { imageUrl, numPages, loading: pdfLoading, error: pdfError } = usePdfPageImage(sourceUrl, pageNum);
 
   const getPagePos = useCallback((clientX: number, clientY: number, sizeWidthPercent: number) => {
     if (!pageContainerRef.current) return null;
@@ -228,10 +231,26 @@ export function AdminAdjustSignaturesModal({
     setSteps(prev => prev.map(s => s.level === level ? { ...s, signatureSize: newSize } : s));
   };
 
-  const handleSave = () => {
-    onSave(steps);
-    toast.success('บันทึกปรับปรุงตำแหน่งลายเซ็นเรียบร้อยแล้ว');
-    onClose();
+  const handleDateSizeChange = (level: number, newSize: number) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, dateSize: newSize } : s));
+  };
+
+  const handleCheckmarkSizeChange = (level: number, newSize: number) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, checkmarkSize: newSize } : s));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave(steps, applyToAllActive);
+      toast.success('บันทึกปรับปรุงตำแหน่งลายเซ็นเรียบร้อยแล้ว');
+      onClose();
+    } catch (err) {
+      console.error('Save failed:', err);
+      toast.error('เกิดข้อผิดพลาดระหว่างบันทึก');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Color mappings for each step level
@@ -284,19 +303,58 @@ export function AdminAdjustSignaturesModal({
                       </span>
                     </div>
                     
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>ขนาดความกว้าง</span>
-                        <span className="font-semibold text-gray-700">{step.signatureSize || 12}%</span>
+                    <div className="space-y-3">
+                      {/* Signature size slider */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span>ขนาดลายเซ็น</span>
+                          <span className="font-semibold text-gray-700">{step.signatureSize || 12}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={5}
+                          max={40}
+                          value={step.signatureSize || 12}
+                          onChange={e => handleSizeChange(step.level, Number(e.target.value))}
+                          className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        />
                       </div>
-                      <input
-                        type="range"
-                        min={5}
-                        max={40}
-                        value={step.signatureSize || 12}
-                        onChange={e => handleSizeChange(step.level, Number(e.target.value))}
-                        className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                      />
+
+                      {/* Date size slider */}
+                      {step.dateBlock && (
+                        <div className="space-y-1 pt-1 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>ขนาดวันที่</span>
+                            <span className="font-semibold text-gray-700">{step.dateSize || 11}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={6}
+                            max={30}
+                            value={step.dateSize || 11}
+                            onChange={e => handleDateSizeChange(step.level, Number(e.target.value))}
+                            className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      )}
+
+                      {/* Checkmark size slider */}
+                      {step.checkmarkBlock && (
+                        <div className="space-y-1 pt-1 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>ขนาดเครื่องหมายถูก</span>
+                            <span className="font-semibold text-gray-700">{step.checkmarkSize || 15}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={8}
+                            max={40}
+                            value={step.checkmarkSize || 15}
+                            onChange={e => handleCheckmarkSizeChange(step.level, Number(e.target.value))}
+                            className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -407,12 +465,12 @@ export function AdminAdjustSignaturesModal({
                       <div
                         onMouseDown={e => onMouseDown(e, step.level, 'checkmark')}
                         onTouchStart={e => onTouchStart(e, step.level, 'checkmark')}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none font-bold text-green-700 border border-dashed border-green-500 bg-white/65 px-1 rounded flex items-center justify-center`}
+                        className={`absolute cursor-grab active:cursor-grabbing select-none font-bold text-green-700 border border-dashed border-green-500 bg-transparent rounded flex items-center justify-center`}
                         style={{
                           left: `${step.checkmarkX}%`,
                           top: `${step.checkmarkY}%`,
-                          fontSize: `14px`,
-                          lineHeight: 1.1,
+                          fontSize: `${step.checkmarkSize || 15}px`,
+                          lineHeight: 1,
                           touchAction: 'none'
                         }}
                       >
@@ -425,13 +483,13 @@ export function AdminAdjustSignaturesModal({
                       <div
                         onMouseDown={e => onMouseDown(e, step.level, 'date')}
                         onTouchStart={e => onTouchStart(e, step.level, 'date')}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none text-gray-800 font-semibold border border-dashed border-gray-400 bg-white/65 px-1 py-0.5 rounded whitespace-nowrap`}
+                        className={`absolute cursor-grab active:cursor-grabbing select-none text-gray-800 font-semibold border border-dashed border-gray-400 bg-transparent rounded whitespace-nowrap`}
                         style={{
                           left: `${step.dateX}%`,
                           top: `${step.dateY}%`,
-                          fontSize: `11px`,
+                          fontSize: `${step.dateSize || 11}px`,
                           fontFamily: 'THSarabun, sans-serif',
-                          lineHeight: 1.1,
+                          lineHeight: 1,
                           touchAction: 'none'
                         }}
                       >
@@ -444,13 +502,13 @@ export function AdminAdjustSignaturesModal({
                       <div
                         onMouseDown={e => onMouseDown(e, step.level, 'text')}
                         onTouchStart={e => onTouchStart(e, step.level, 'text')}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none text-gray-800 font-semibold border border-dashed border-gray-400 bg-white/65 px-1 py-0.5 rounded whitespace-nowrap`}
+                        className={`absolute cursor-grab active:cursor-grabbing select-none text-gray-800 font-semibold border border-dashed border-gray-400 bg-transparent rounded whitespace-nowrap`}
                         style={{
                           left: `${step.textBlockX}%`,
                           top: `${step.textBlockY}%`,
                           fontSize: `12px`,
                           fontFamily: 'THSarabun, sans-serif',
-                          lineHeight: 1.1,
+                          lineHeight: 1,
                           touchAction: 'none'
                         }}
                       >
@@ -465,14 +523,39 @@ export function AdminAdjustSignaturesModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center shrink-0 rounded-b-2xl">
-          <p className="text-[11px] text-gray-400">ระบบจะจำลองการแสดงผลทับซ้อนและเรนเดอร์ PDF ใหม่เมื่อกดดาวน์โหลด</p>
-          <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-semibold text-gray-600 transition-colors">
+        <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 rounded-b-2xl">
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={applyToAllActive}
+                onChange={e => setApplyToAllActive(e.target.checked)}
+                disabled={saving}
+                className="rounded border-gray-300 text-[#1a5c2e] focus:ring-[#1a5c2e] h-3.5 w-3.5 transition-colors cursor-pointer"
+              />
+              อัปเดตตำแหน่งเหล่านี้ไปยังทุกเอกสารประเภทนี้ที่ยังอนุมัติไม่ครบด้วย
+            </label>
+            <p className="text-[10px] text-gray-400 pl-5.5">ระบบจะสร้าง PDF ใหม่พร้อมลายเซ็นที่ปรับตำแหน่งแล้ว อาจใช้เวลาสักครู่</p>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto justify-end">
+            <button onClick={onClose} disabled={saving} className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-semibold text-gray-600 transition-colors disabled:opacity-50">
               ยกเลิก
             </button>
-            <button onClick={handleSave} className="px-4 py-2 bg-[#1a5c2e] hover:bg-green-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5">
-              <Check size={14} /> บันทึกและอัปเดต
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 bg-[#1a5c2e] hover:bg-green-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed min-w-[160px] justify-center"
+            >
+              {saving ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  กำลังประมวลผล...
+                </>
+              ) : (
+                <>
+                  <Check size={14} /> บันทึกและอัปเดต
+                </>
+              )}
             </button>
           </div>
         </div>
