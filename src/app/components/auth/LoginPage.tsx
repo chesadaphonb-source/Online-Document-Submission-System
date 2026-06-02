@@ -206,7 +206,7 @@ export function LoginPage() {
             {step === 'role' && (
               <div className="flex flex-col h-full">
                 <div className="mb-7">
-                  <h2 className="text-green-800 text-xl font-semibold mb-1">ขั้นตอนที่ 1</h2>
+                  <h2 onClick={handleSecretAdmin} className="text-green-800 text-xl font-semibold mb-1 cursor-pointer select-none">ขั้นตอนที่ 1</h2>
                   <p className="text-gray-500 text-sm">เลือกบทบาทของท่านในระบบ KU-Paper</p>
                 </div>
                 <div className="space-y-4 flex-1">
@@ -231,7 +231,7 @@ export function LoginPage() {
                   })}
                 </div>
                 <div className="mt-6 border-t border-gray-100 pt-4 text-center">
-                  <p className="text-xs text-gray-400">ระบบสำหรับบุคลากรและนิสิต มก. เท่านั้น</p>
+                  <p onClick={handleSecretAdmin} className="text-xs text-gray-400 cursor-pointer select-none">ระบบสำหรับบุคลากรและนิสิต มก. เท่านั้น</p>
                   <p className="text-xs text-gray-500 mt-2 flex items-center justify-center gap-1.5">
                     <span className="font-semibold text-[9px] bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded uppercase shrink-0">LINE ADMIN</span>
                     <span className="select-all font-mono font-medium text-xs text-gray-700">@line 0949906050</span>
