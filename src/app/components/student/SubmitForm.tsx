@@ -130,7 +130,11 @@ async function uploadFileToSupabase(file: File): Promise<{ url: string; name: st
     // fallback: object URL (local only)
     return { url: URL.createObjectURL(file), name: file.name, size: formatFileSize(file.size) };
   }
-  const filePath = `submissions/${Date.now()}_${file.name}`;
+  const ext = file.name.split('.').pop() || '';
+  const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+  const cleanBase = baseName.replace(/[^a-zA-Z0-9-_]/g, '_').replace(/^_+|_+$/g, '');
+  const safeBase = cleanBase || 'document';
+  const filePath = `submissions/${Date.now()}_${safeBase}.${ext}`;
   const { error } = await supabase.storage.from('attachments').upload(filePath, file, {
     contentType: file.type,
     upsert: false,
