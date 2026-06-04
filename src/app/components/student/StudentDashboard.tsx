@@ -135,7 +135,7 @@ export function StudentDashboard() {
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
     supabase.from('forms_library')
-      .select('id,name,description,category,file_url,file_name,required_docs,campus')
+      .select('id,name,description,category,file_url,file_name,required_docs')
       .eq('is_active', true)
       .order('category')
       .then(({ data }) => { if (data) setForms(data); });
