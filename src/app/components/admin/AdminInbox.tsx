@@ -233,7 +233,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
             <Download size={13} /> ดาวน์โหลดใบอนุมัติ (KU-Paper)
           </button>
 
-          {hasAttachments && sub.attachments!.some(a => a.type === 'pdf') && (
+          {hasAttachments && sub.attachments!.some(a => a.type === 'pdf') && mode === 'pending_close' && (
             <button
               onClick={async () => {
                 const pdfAttach = sub.attachments!.find(a => a.type === 'pdf')!;
