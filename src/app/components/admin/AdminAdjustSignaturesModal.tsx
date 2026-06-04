@@ -91,7 +91,7 @@ interface AdminAdjustSignaturesModalProps {
 
 interface DraggableItem {
   level: number;
-  type: 'signature' | 'checkmark' | 'date' | 'text' | 'extraSignature';
+  type: 'signature' | 'checkmark' | 'date' | 'text' | 'extraSignature' | 'extraText';
   extraIndex?: number;
 }
 
@@ -163,6 +163,11 @@ export function AdminAdjustSignaturesModal({
               newExtras[extraIndex] = { x: p.x, y: p.y };
               return { ...s, extraSignaturePositions: newExtras };
             }
+            if (type === 'extraText' && extraIndex !== undefined && s.extraTextBlocks) {
+              const newExtras = [...s.extraTextBlocks];
+              newExtras[extraIndex] = { ...newExtras[extraIndex], x: p.x, y: p.y };
+              return { ...s, extraTextBlocks: newExtras };
+            }
           }
           return s;
         }));
@@ -218,6 +223,11 @@ export function AdminAdjustSignaturesModal({
               const newExtras = [...s.extraSignaturePositions];
               newExtras[extraIndex] = { x: p.x, y: p.y };
               return { ...s, extraSignaturePositions: newExtras };
+            }
+            if (type === 'extraText' && extraIndex !== undefined && s.extraTextBlocks) {
+              const newExtras = [...s.extraTextBlocks];
+              newExtras[extraIndex] = { ...newExtras[extraIndex], x: p.x, y: p.y };
+              return { ...s, extraTextBlocks: newExtras };
             }
           }
           return s;
@@ -287,6 +297,49 @@ export function AdminAdjustSignaturesModal({
   // Remove date block
   const handleRemoveDateBlock = (level: number) => {
     setSteps(prev => prev.map(s => s.level === level ? { ...s, dateBlock: undefined, dateX: undefined, dateY: undefined, dateSize: undefined } : s));
+  };
+
+  // Add extra text block
+  const handleAddExtraTextBlock = (level: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level) return s;
+      const extras = s.extraTextBlocks ? [...s.extraTextBlocks] : [];
+      // Position near extra signature if available, otherwise near primary sig
+      const extraSigPos = s.extraSignaturePositions?.[extras.length];
+      const baseX = extraSigPos?.x ?? (s.signatureX ?? 60);
+      const baseY = extraSigPos?.y ?? (s.signatureY ?? 65);
+      extras.push({ val: s.approverName || '', x: baseX, y: baseY + 5, size: 11 });
+      return { ...s, extraTextBlocks: extras };
+    }));
+  };
+
+  // Edit extra text block value
+  const handleExtraTextBlockChange = (level: number, idx: number, val: string) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level || !s.extraTextBlocks) return s;
+      const extras = [...s.extraTextBlocks];
+      extras[idx] = { ...extras[idx], val };
+      return { ...s, extraTextBlocks: extras };
+    }));
+  };
+
+  // Edit extra text block size
+  const handleExtraTextBlockSizeChange = (level: number, idx: number, size: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level || !s.extraTextBlocks) return s;
+      const extras = [...s.extraTextBlocks];
+      extras[idx] = { ...extras[idx], size };
+      return { ...s, extraTextBlocks: extras };
+    }));
+  };
+
+  // Remove extra text block
+  const handleRemoveExtraTextBlock = (level: number, idx: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level || !s.extraTextBlocks) return s;
+      const extras = s.extraTextBlocks.filter((_, i) => i !== idx);
+      return { ...s, extraTextBlocks: extras.length > 0 ? extras : undefined };
+    }));
   };
 
   const handleSave = async () => {
@@ -463,6 +516,47 @@ export function AdminAdjustSignaturesModal({
                           />
                         </div>
                       )}
+
+                      {/* Extra text blocks (additional name/date annotations) */}
+                      <div className="space-y-1.5 pt-1.5 border-t border-gray-100">
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span className="font-semibold">ข้อความเสริม</span>
+                          <span className="text-[10px] text-gray-400">{(step.extraTextBlocks || []).length} รายการ</span>
+                        </div>
+                        {(step.extraTextBlocks || []).map((tb, tbIdx) => (
+                          <div key={tbIdx} className="bg-gray-50 p-2 rounded-lg border border-gray-100 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-gray-400">จุด {tbIdx + 1}</span>
+                              <button
+                                onClick={() => handleRemoveExtraTextBlock(step.level, tbIdx)}
+                                className="text-[10px] text-red-400 hover:text-red-600"
+                              >ลบ</button>
+                            </div>
+                            <input
+                              type="text"
+                              value={tb.val}
+                              onChange={e => handleExtraTextBlockChange(step.level, tbIdx, e.target.value)}
+                              className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1a5c2e] bg-white"
+                              placeholder="ข้อความ เช่น ชื่ออาจารย์ หรือ วันที่"
+                            />
+                            <div className="flex items-center justify-between text-[10px] text-gray-400">
+                              <span>ขนาด</span>
+                              <span>{tb.size}px</span>
+                            </div>
+                            <input
+                              type="range" min={6} max={24} value={tb.size}
+                              onChange={e => handleExtraTextBlockSizeChange(step.level, tbIdx, Number(e.target.value))}
+                              className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => handleAddExtraTextBlock(step.level)}
+                          className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          <Plus size={12} /> เพิ่มข้อความเสริม (ชื่อ/วันที่)
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -623,6 +717,29 @@ export function AdminAdjustSignaturesModal({
                         {step.textBlock}
                       </div>
                     )}
+
+                    {/* Extra Text Blocks */}
+                    {step.extraTextBlocks?.map((tb, tbIdx) => (
+                      <div
+                        key={`extra-text-${step.level}-${tbIdx}`}
+                        onMouseDown={e => onMouseDown(e, step.level, 'extraText', tbIdx)}
+                        onTouchStart={e => onTouchStart(e, step.level, 'extraText', tbIdx)}
+                        className={`absolute cursor-grab active:cursor-grabbing select-none text-gray-800 font-semibold border border-dashed border-blue-400 bg-transparent rounded whitespace-nowrap`}
+                        style={{
+                          left: `${tb.x}%`,
+                          top: `${tb.y}%`,
+                          fontSize: `${tb.size}px`,
+                          fontFamily: 'THSarabun, sans-serif',
+                          lineHeight: 1,
+                          touchAction: 'none'
+                        }}
+                      >
+                        {tb.val}
+                        <div className={`absolute -top-3 left-0 text-[7px] font-semibold text-white px-1 py-0.5 rounded shadow-xs whitespace-nowrap ${bgHex} pointer-events-none`}>
+                          เสริม {tbIdx + 1}
+                        </div>
+                      </div>
+                    ))}
                   </React.Fragment>
                 );
               })}
