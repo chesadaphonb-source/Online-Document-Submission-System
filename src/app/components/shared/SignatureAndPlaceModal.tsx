@@ -773,24 +773,16 @@ export function SignatureAndPlaceModal({
                         draggable={false}
                         onMouseDown={(e) => onMouseDown(e, 'signature', idx)}
                         onTouchStart={(e) => onTouchStart(e, 'signature', idx)}
-                        className="absolute cursor-grab active:cursor-grabbing select-none mix-blend-multiply"
+                        className={`absolute cursor-grab active:cursor-grabbing select-none mix-blend-multiply border-2 border-dashed ${
+                          idx === 0 ? 'border-green-500/80' : 'border-purple-500/80'
+                        } rounded`}
                         style={{
                           left: `${sp.x}%`,
                           top: `${sp.y}%`,
                           width: `${sigSize}%`,
-                          filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.25))',
+                          filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.15))',
                           userSelect: 'none',
                           touchAction: 'none',
-                        }}
-                      />
-                      <div
-                        className={`absolute border-2 border-dashed rounded pointer-events-none ${idx === 0 ? 'border-green-500/80' : 'border-purple-500/80'}`}
-                        style={{
-                          left: `${sp.x}%`,
-                          top: `${sp.y}%`,
-                          width: `${sigSize}%`,
-                          height: '7%',
-                          transform: 'translateY(-4%)',
                         }}
                       />
                       {idx > 0 && (
@@ -807,98 +799,63 @@ export function SignatureAndPlaceModal({
                   {/* Draggable Text Blocks — all items in textItems */}
                   {(pdfImageUrl || !selectedPdf) && textItems.map((item, idx) =>
                     item.val ? (
-                      <React.Fragment key={idx}>
-                        <div
-                          onMouseDown={(e) => onMouseDown(e, 'text', idx)}
-                          onTouchStart={(e) => onTouchStart(e, 'text', idx)}
-                          className="absolute cursor-grab active:cursor-grabbing select-none font-medium whitespace-nowrap text-gray-900"
-                          style={{
-                            left: `${item.pos.x}%`,
-                            top: `${item.pos.y}%`,
-                            fontSize: `${item.size}px`,
-                            fontFamily: 'THSarabun, sans-serif',
-                            background: 'transparent',
-                            lineHeight: 1,
-                            userSelect: 'none',
-                            touchAction: 'none',
-                          }}
-                        >
-                          {item.val}
-                        </div>
-                        <div
-                          className="absolute border border-dashed border-blue-500/70 rounded pointer-events-none"
-                          style={{
-                            left: `${item.pos.x - 0.5}%`,
-                            top: `${item.pos.y - 1}%`,
-                            width: `${item.val.length * (item.size * 0.45)}px`,
-                            height: `${item.size + 4}px`,
-                          }}
-                        />
-                      </React.Fragment>
-                    ) : null
-                  )}
-
-                  {/* Draggable Date Block */}
-                  {(pdfImageUrl || !selectedPdf) && useDate && dateVal && (
-                    <>
                       <div
-                        onMouseDown={(e) => onMouseDown(e, 'date', 0)}
-                        onTouchStart={(e) => onTouchStart(e, 'date', 0)}
-                        className="absolute cursor-grab active:cursor-grabbing select-none font-medium whitespace-nowrap text-blue-850 bg-blue-50/10 px-1 border border-blue-200/25 rounded"
+                        key={idx}
+                        onMouseDown={(e) => onMouseDown(e, 'text', idx)}
+                        onTouchStart={(e) => onTouchStart(e, 'text', idx)}
+                        className="absolute cursor-grab active:cursor-grabbing select-none font-semibold whitespace-nowrap text-gray-800 border border-dashed border-gray-400 bg-transparent rounded"
                         style={{
-                          left: `${datePos.x}%`,
-                          top: `${datePos.y}%`,
-                          fontSize: `${dateSize}px`,
+                          left: `${item.pos.x}%`,
+                          top: `${item.pos.y}%`,
+                          fontSize: `${item.size}px`,
                           fontFamily: 'THSarabun, sans-serif',
                           lineHeight: 1,
                           userSelect: 'none',
                           touchAction: 'none',
                         }}
                       >
-                        {dateVal}
+                        {item.val}
                       </div>
-                      {/* Date placement guide border */}
-                      <div
-                        className="absolute border border-dashed border-blue-400/80 rounded pointer-events-none"
-                        style={{
-                          left: `${datePos.x - 0.5}%`,
-                          top: `${datePos.y - 1}%`,
-                          width: `${dateVal.length * (dateSize * 0.55)}px`,
-                          height: `${dateSize + 4}px`,
-                        }}
-                      />
-                    </>
+                    ) : null
+                  )}
+
+                  {/* Draggable Date Block */}
+                  {(pdfImageUrl || !selectedPdf) && useDate && dateVal && (
+                    <div
+                      onMouseDown={(e) => onMouseDown(e, 'date', 0)}
+                      onTouchStart={(e) => onTouchStart(e, 'date', 0)}
+                      className="absolute cursor-grab active:cursor-grabbing select-none font-semibold whitespace-nowrap text-gray-800 border border-dashed border-gray-400 bg-transparent rounded"
+                      style={{
+                        left: `${datePos.x}%`,
+                        top: `${datePos.y}%`,
+                        fontSize: `${dateSize}px`,
+                        fontFamily: 'THSarabun, sans-serif',
+                        lineHeight: 1,
+                        userSelect: 'none',
+                        touchAction: 'none',
+                      }}
+                    >
+                      {dateVal}
+                    </div>
                   )}
 
                   {/* Draggable Checkmark Block */}
                   {(pdfImageUrl || !selectedPdf) && useCheckmark && checkmarkVal && (
-                    <>
-                      <div
-                        onMouseDown={(e) => onMouseDown(e, 'checkmark')}
-                        onTouchStart={(e) => onTouchStart(e, 'checkmark')}
-                        className="absolute cursor-grab active:cursor-grabbing select-none font-extrabold text-green-700 bg-green-50/10 px-0.5 border border-green-300/25 rounded"
-                        style={{
-                          left: `${checkmarkPos.x}%`,
-                          top: `${checkmarkPos.y}%`,
-                          fontSize: `17px`,
-                          lineHeight: 1,
-                          userSelect: 'none',
-                          touchAction: 'none',
-                        }}
-                      >
-                        {checkmarkVal}
-                      </div>
-                      {/* Checkmark placement guide border */}
-                      <div
-                        className="absolute border border-dashed border-green-500/80 rounded pointer-events-none"
-                        style={{
-                          left: `${checkmarkPos.x - 1}%`,
-                          top: `${checkmarkPos.y - 1}%`,
-                          width: `18px`,
-                          height: `20px`,
-                        }}
-                      />
-                    </>
+                    <div
+                      onMouseDown={(e) => onMouseDown(e, 'checkmark')}
+                      onTouchStart={(e) => onTouchStart(e, 'checkmark')}
+                      className="absolute cursor-grab active:cursor-grabbing select-none font-extrabold text-green-700 border border-dashed border-green-500 bg-transparent rounded flex items-center justify-center"
+                      style={{
+                        left: `${checkmarkPos.x}%`,
+                        top: `${checkmarkPos.y}%`,
+                        fontSize: `17px`,
+                        lineHeight: 1,
+                        userSelect: 'none',
+                        touchAction: 'none',
+                      }}
+                    >
+                      {checkmarkVal}
+                    </div>
                   )}
                 </div>
 
