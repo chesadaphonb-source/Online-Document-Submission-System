@@ -1,7 +1,16 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Move, Check, X, Loader2 } from 'lucide-react';
+import { Move, Check, X, Loader2, Plus, Calendar, Type } from 'lucide-react';
 import type { Submission, ApprovalStep } from '../../data/mockData';
 import { toast } from 'sonner';
+
+// Helper to generate Thai Buddhist Era date string
+function getThaiDateString(sep = '/') {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear() + 543;
+  return `${day}${sep}${month}${sep}${year}`;
+}
 
 // ── Render PDF page to image URL (offscreen canvas) ──────────
 function usePdfPageImage(url: string | null, pageNum: number) {
@@ -239,6 +248,47 @@ export function AdminAdjustSignaturesModal({
     setSteps(prev => prev.map(s => s.level === level ? { ...s, checkmarkSize: newSize } : s));
   };
 
+  const handleTextBlockSizeChange = (level: number, newSize: number) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, textBlockSize: newSize } : s));
+  };
+
+  // Add a new text block for a step (e.g., teacher name)
+  const handleAddTextBlock = (level: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level) return s;
+      const name = s.approverName || s.roleName || '';
+      return { ...s, textBlock: name, textBlockX: (s.signatureX ?? 30), textBlockY: (s.signatureY ?? 65) + 5, textBlockSize: 12 };
+    }));
+  };
+
+  // Add a new date block for a step
+  const handleAddDateBlock = (level: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level) return s;
+      return { ...s, dateBlock: getThaiDateString('/'), dateX: (s.signatureX ?? 30), dateY: (s.signatureY ?? 65) + 8, dateSize: 11 };
+    }));
+  };
+
+  // Update text block content
+  const handleTextBlockChange = (level: number, val: string) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, textBlock: val } : s));
+  };
+
+  // Update date block content
+  const handleDateBlockChange = (level: number, val: string) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, dateBlock: val } : s));
+  };
+
+  // Remove text block
+  const handleRemoveTextBlock = (level: number) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, textBlock: undefined, textBlockX: undefined, textBlockY: undefined, textBlockSize: undefined } : s));
+  };
+
+  // Remove date block
+  const handleRemoveDateBlock = (level: number) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, dateBlock: undefined, dateX: undefined, dateY: undefined, dateSize: undefined } : s));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -320,23 +370,81 @@ export function AdminAdjustSignaturesModal({
                         />
                       </div>
 
-                      {/* Date size slider */}
-                      {step.dateBlock && (
-                        <div className="space-y-1 pt-1 border-t border-gray-100">
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>ขนาดวันที่</span>
-                            <span className="font-semibold text-gray-700">{step.dateSize || 11}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={6}
-                            max={30}
-                            value={step.dateSize || 11}
-                            onChange={e => handleDateSizeChange(step.level, Number(e.target.value))}
-                            className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                      )}
+                      {/* Text block (teacher name) */}
+                      <div className="space-y-1.5 pt-1.5 border-t border-gray-100">
+                        {step.textBlock ? (
+                          <>
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span className="flex items-center gap-1"><Type size={10} /> ข้อความ (ชื่อ)</span>
+                              <button onClick={() => handleRemoveTextBlock(step.level)} className="text-[10px] text-red-400 hover:text-red-600">ลบ</button>
+                            </div>
+                            <input
+                              type="text"
+                              value={step.textBlock}
+                              onChange={e => handleTextBlockChange(step.level, e.target.value)}
+                              className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1a5c2e] bg-white"
+                              placeholder="ชื่ออาจารย์"
+                            />
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span>ขนาดข้อความ</span>
+                              <span className="font-semibold text-gray-700">{step.textBlockSize || 12}px</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={8}
+                              max={24}
+                              value={step.textBlockSize || 12}
+                              onChange={e => handleTextBlockSizeChange(step.level, Number(e.target.value))}
+                              className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleAddTextBlock(step.level)}
+                            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium text-[#1a5c2e] bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                          >
+                            <Plus size={12} /> เพิ่มข้อความ (ชื่ออาจารย์)
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Date block */}
+                      <div className="space-y-1.5 pt-1.5 border-t border-gray-100">
+                        {step.dateBlock ? (
+                          <>
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span className="flex items-center gap-1"><Calendar size={10} /> วันที่</span>
+                              <button onClick={() => handleRemoveDateBlock(step.level)} className="text-[10px] text-red-400 hover:text-red-600">ลบ</button>
+                            </div>
+                            <input
+                              type="text"
+                              value={step.dateBlock}
+                              onChange={e => handleDateBlockChange(step.level, e.target.value)}
+                              className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1a5c2e] bg-white"
+                              placeholder="วว/ดด/ปปปป"
+                            />
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span>ขนาดวันที่</span>
+                              <span className="font-semibold text-gray-700">{step.dateSize || 11}px</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={6}
+                              max={30}
+                              value={step.dateSize || 11}
+                              onChange={e => handleDateSizeChange(step.level, Number(e.target.value))}
+                              className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleAddDateBlock(step.level)}
+                            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium text-[#1a5c2e] bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                          >
+                            <Plus size={12} /> เพิ่มวันที่
+                          </button>
+                        )}
+                      </div>
 
                       {/* Checkmark size slider */}
                       {step.checkmarkBlock && (
@@ -506,7 +614,7 @@ export function AdminAdjustSignaturesModal({
                         style={{
                           left: `${step.textBlockX}%`,
                           top: `${step.textBlockY}%`,
-                          fontSize: `12px`,
+                          fontSize: `${step.textBlockSize || 12}px`,
                           fontFamily: 'THSarabun, sans-serif',
                           lineHeight: 1,
                           touchAction: 'none'
