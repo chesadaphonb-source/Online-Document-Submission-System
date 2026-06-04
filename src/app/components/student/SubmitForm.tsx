@@ -47,7 +47,7 @@ function FormDownloadSection() {
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.from('forms_library').select('id,name,description,category,file_url,file_name,required_docs')
+    supabase.from('forms_library').select('id,name,description,category,file_url,file_name,required_docs,campus')
       .eq('is_active', true)
       .order('category')
       .then(({ data }) => {
@@ -246,7 +246,7 @@ export function SubmitForm() {
   // โหลด required_docs และ workflow_steps จาก library
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.from('forms_library').select('id,name,file_name,required_docs,workflow_steps')
+    supabase.from('forms_library').select('id,name,file_name,required_docs,workflow_steps,campus')
       .eq('is_active', true)
       .then(({ data }) => { if (data) setLibraryForms(data); });
   }, [currentUser]);
