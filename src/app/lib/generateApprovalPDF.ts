@@ -508,10 +508,13 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
       const cx = (step.checkmarkX / 100) * 210;
       const cy = (step.checkmarkY / 100) * 297;
       const fontSize = step.checkmarkSize || 15;
-      doc.setFontSize(fontSize);
-      doc.setFont('THSarabun', 'bold');
-      doc.setTextColor(22, 101, 52); // green checkmark
-      doc.text(step.checkmarkBlock, cx, cy + (fontSize * 0.27)); // dynamic baseline offset
+      const size_mm = fontSize * 0.352778; // Convert pt to mm
+      
+      // Draw checkmark using vector lines instead of text to avoid font glyph issues (✓ not supported in THSarabun)
+      doc.setDrawColor(22, 101, 52); // green checkmark color
+      doc.setLineWidth(size_mm * 0.15); // proportional thickness
+      doc.line(cx + size_mm * 0.15, cy + size_mm * 0.55, cx + size_mm * 0.4, cy + size_mm * 0.8);
+      doc.line(cx + size_mm * 0.4, cy + size_mm * 0.8, cx + size_mm * 0.85, cy + size_mm * 0.25);
     }
   }
 }
