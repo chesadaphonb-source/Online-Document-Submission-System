@@ -242,7 +242,7 @@ function SubmissionCard({ sub }: { sub: Submission }) {
                 <p className="text-xs text-gray-400 mt-0.5 font-mono">#{sub.id.slice(-8)}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {sub.revisionCount && sub.revisionCount > 0 && (
+                {(sub.revisionCount ?? 0) > 0 && (
                   <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">
                     ยื่นซ้ำ ×{sub.revisionCount}
                   </span>

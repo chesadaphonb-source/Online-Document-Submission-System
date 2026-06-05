@@ -190,7 +190,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
                 {sub.department && <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{sub.department}</span>}
                 <span className="text-xs text-gray-400 flex items-center gap-1"><Calendar size={11} /> {formatDateTime(sub.submittedAt)}</span>
                 {hasAttachments && <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full flex items-center gap-1"><Paperclip size={9} /> {sub.attachments!.length} ไฟล์</span>}
-                {sub.revisionCount && sub.revisionCount > 0 && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">ยื่นซ้ำ ครั้งที่ {sub.revisionCount}</span>}
+                {(sub.revisionCount ?? 0) > 0 && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">ยื่นซ้ำ ครั้งที่ {sub.revisionCount}</span>}
               </div>
             </div>
           </div>
