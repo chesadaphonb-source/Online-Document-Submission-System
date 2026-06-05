@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSubmissions } from '../../context/SubmissionsContext';
 import { useAuth } from '../../context/AuthContext';
+import { SUPER_ADMIN_EMAILS } from '../../context/SystemContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { PdfViewerModal } from '../shared/PdfViewerModal';
 import { previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
@@ -207,7 +208,7 @@ function SubmissionRow({ sub }: { sub: Submission }) {
               <PenLine size={13} /> ดูเอกสารที่ลงลายเซ็นแล้ว
             </button>
           )}
-          {currentUser?.email === 'chesadaphon.b@ku.th' && hasAttachments && (
+          {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && hasAttachments && (
             <button
               onClick={() => setAdjustOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-amber-700 hover:bg-amber-50 border-l border-gray-100 transition-colors shrink-0"

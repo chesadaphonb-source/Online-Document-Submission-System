@@ -11,7 +11,7 @@ interface SystemContextType {
 
 const SystemContext = createContext<SystemContextType | undefined>(undefined);
 
-const SUPER_ADMIN_EMAIL = 'chesadaphon.b@ku.th';
+export const SUPER_ADMIN_EMAILS = ['chesadaphon.b@ku.th', 'rampai.s@ku.th', 'rampai.se@ku.th'];
 
 export function SystemProvider({ children }: { children: ReactNode }) {
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
@@ -65,7 +65,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
 
   const toggleMaintenanceMode = async (enabled: boolean) => {
     if (!isSupabaseConfigured || !supabase) return;
-    if (currentUser?.email !== SUPER_ADMIN_EMAIL) {
+    if (!currentUser?.email || !SUPER_ADMIN_EMAILS.includes(currentUser.email)) {
       toast.error('คุณไม่มีสิทธิ์ใช้งานคำสั่งนี้');
       return;
     }
@@ -86,7 +86,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   };
 
   // If maintenance mode is ON and user is NOT super admin, show maintenance screen
-  const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
+  const isSuperAdmin = !!currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email);
   const isLoginPage = typeof window !== 'undefined' && window.location.pathname === '/login';
   
   if (!loading && !authLoading && isMaintenanceMode && !isSuperAdmin && !isLoginPage) {

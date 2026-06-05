@@ -4,7 +4,7 @@ import { useSubmissions } from '../../context/SubmissionsContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { PdfViewerModal } from '../shared/PdfViewerModal';
 import { SignatureAndPlaceModal } from '../shared/SignatureAndPlaceModal';
-import { generateApprovalPDF, previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
+import { previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
 import { formatMoney } from '../../lib/exportUtils';
 import {
   Submission, getSubmissionsForTeacher, mockTeachers, formTemplates,
@@ -50,8 +50,6 @@ function ApprovalModal({ submission, initialSignature, onApprove, onReject, onCl
   const [action, setAction] = useState<'approve' | 'reject' | null>(null);
   const [showSignAndPlace, setShowSignAndPlace] = useState(false);
 
-  const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
-
   const handleConfirm = async () => {
     if (!action) return;
     if (action === 'reject' && !comment.trim()) {
@@ -59,14 +57,6 @@ function ApprovalModal({ submission, initialSignature, onApprove, onReject, onCl
       return;
     }
     if (action === 'approve') {
-      try {
-        const url = await generateApprovalPDF(submission, true);
-        if (typeof url === 'string') {
-          setGeneratedPdfUrl(url);
-        }
-      } catch (e) {
-        console.error('Failed to generate preview PDF', e);
-      }
       setShowSignAndPlace(true);
     } else {
       onReject(comment);
@@ -79,8 +69,6 @@ function ApprovalModal({ submission, initialSignature, onApprove, onReject, onCl
       <SignatureAndPlaceModal
         initialSignature={initialSignature}
         attachments={submission.attachments || []}
-        extraPdfUrl={generatedPdfUrl || undefined}
-        extraPdfLabel="แบบฟอร์มคำร้อง (KU-Paper)"
         existingSteps={submission.approvalSteps}
         onConfirm={(sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize) => {
           onApprove(comment || 'อนุมัติ', sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize);

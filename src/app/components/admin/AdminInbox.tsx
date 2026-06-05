@@ -12,7 +12,7 @@ import {
   Lock, Edit3, Check, Search, UserCheck, Download, PenLine, X, Maximize2, ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { generateApprovalPDF, generateSignedAttachmentPDF, previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
+import { generateSignedAttachmentPDF, previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
 
 interface DBTeacher { id: string; name: string; department?: string; position?: string; is_advisor?: boolean; is_department_head?: boolean; is_dean?: boolean; }
 
@@ -216,22 +216,6 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
               <PenLine size={13} /> ดูเอกสารที่ลงลายเซ็นแล้ว
             </button>
           )}
-
-          <button
-            onClick={async () => {
-              try {
-                await generateApprovalPDF(sub);
-                toast.success('ดาวน์โหลดใบพิจารณาอนุมัติเรียบร้อยแล้ว');
-              } catch (e) {
-                console.error(e);
-                toast.error('ไม่สามารถสร้างใบอนุมัติได้');
-              }
-            }}
-            className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-all"
-            title="ดาวน์โหลดใบพิจารณาอนุมัติสีเขียว (Certificate)"
-          >
-            <Download size={13} /> ดาวน์โหลดใบอนุมัติ (KU-Paper)
-          </button>
 
           {hasAttachments && sub.attachments!.some(a => a.type === 'pdf') && mode === 'pending_close' && (
             <button

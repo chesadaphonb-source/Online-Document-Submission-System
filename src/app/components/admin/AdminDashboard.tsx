@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router';
 import { useState, useEffect } from 'react';
 import { useSubmissions } from '../../context/SubmissionsContext';
-import { useSystem } from '../../context/SystemContext';
+import { useSystem, SUPER_ADMIN_EMAILS } from '../../context/SystemContext';
 import { useAuth } from '../../context/AuthContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { formTemplates, formatDateTime } from '../../data/mockData';
@@ -119,7 +119,7 @@ export function AdminDashboard() {
             </button>
             
             {/* Super Admin Maintenance Toggle */}
-            {currentUser?.email === 'chesadaphon.b@ku.th' && (
+            {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && (
               <div className="bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-xl flex items-center gap-3">
                 <div className="text-right">
                   <p className="text-sm font-semibold text-white">Maintenance Mode</p>
@@ -302,7 +302,7 @@ export function AdminDashboard() {
         </div>
       </div>
       {/* Data Retention Tool (Super Admin Only) */}
-      {currentUser?.email === 'chesadaphon.b@ku.th' && (
+      {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && (
         <div className="bg-red-50 rounded-xl border border-red-100 p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>

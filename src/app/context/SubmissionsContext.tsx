@@ -719,7 +719,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
           const newUrl = urlData.publicUrl + `?t=${Date.now()}`;
 
           // Update the attachment URL in submission state
-          const updatedAttachments = [{ ...attach, url: newUrl, name: attach.name.replace(/\.[^.]+$/, '.pdf') }, ...targetSub.attachments.slice(1)];
+          const updatedAttachments = [{ ...attach, url: newUrl, name: attach.name.replace(/\.[^.]+$/, '.pdf'), type: 'pdf' as const }, ...targetSub.attachments.slice(1)];
 
           setSubmissions(prev => prev.map(s =>
             s.id === submissionId
@@ -732,7 +732,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
         } else {
           // No Supabase — create blob URL for local preview
           const blobUrl = URL.createObjectURL(pdfBlob);
-          const updatedAttachments = [{ ...attach, url: blobUrl, name: attach.name.replace(/\.[^.]+$/, '.pdf') }, ...targetSub.attachments.slice(1)];
+          const updatedAttachments = [{ ...attach, url: blobUrl, name: attach.name.replace(/\.[^.]+$/, '.pdf'), type: 'pdf' as const }, ...targetSub.attachments.slice(1)];
 
           setSubmissions(prev => prev.map(s =>
             s.id === submissionId

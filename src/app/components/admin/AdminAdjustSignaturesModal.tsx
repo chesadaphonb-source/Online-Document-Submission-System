@@ -13,7 +13,7 @@ function getThaiDateString(sep = '/') {
 }
 
 // ── Render PDF page to image URL (offscreen canvas) ──────────
-function usePdfPageImage(url: string | null, pageNum: number) {
+function usePdfPageImage(url: string | null, pageNum: number, fileName?: string) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -22,12 +22,39 @@ function usePdfPageImage(url: string | null, pageNum: number) {
   useEffect(() => {
     if (!url) { setImageUrl(null); return; }
     let cancelled = false;
+    let createdBlobUrl: string | null = null;
     setLoading(true);
     setError(null);
     setImageUrl(null);
 
+    const fnLower = (fileName || '').toLowerCase();
+    const urlLower = (url || '').toLowerCase();
+    const isUrlImage = urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.includes('.jpg?') || urlLower.includes('.jpeg?') || urlLower.includes('.png?');
+    const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png') || isUrlImage;
+
     (async () => {
       try {
+        if (isImage) {
+          let finalUrl = url;
+          if (!url.startsWith('blob:') && !url.startsWith('data:')) {
+            const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            finalUrl = URL.createObjectURL(blob);
+            createdBlobUrl = finalUrl;
+          }
+
+          if (cancelled) {
+            if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
+            return;
+          }
+
+          setImageUrl(finalUrl);
+          setNumPages(1);
+          setLoading(false);
+          return;
+        }
+
         const pdfjsLib = await import('pdfjs-dist');
 
         pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -70,15 +97,20 @@ function usePdfPageImage(url: string | null, pageNum: number) {
         }
       } catch (err: any) {
         if (!cancelled && err?.name !== 'RenderingCancelledException') {
-          console.error('[AdminAdjustModal] PDF render error:', err);
-          setError('ไม่สามารถแสดง PDF ได้ (CORS หรือ URL ไม่ถูกต้อง)');
+          console.error('[AdminAdjustModal] PDF/Image render error:', err);
+          setError('ไม่สามารถแสดงไฟล์ได้ (CORS หรือ URL ไม่ถูกต้อง)');
           setLoading(false);
         }
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [url, pageNum]);
+    return () => {
+      cancelled = true;
+      if (createdBlobUrl) {
+        URL.revokeObjectURL(createdBlobUrl);
+      }
+    };
+  }, [url, pageNum, fileName]);
 
   return { imageUrl, numPages, loading, error };
 }
@@ -102,7 +134,7 @@ export function AdminAdjustSignaturesModal({
 }: AdminAdjustSignaturesModalProps) {
   const [pageNum, setPageNum] = useState(1);
   const [steps, setSteps] = useState<ApprovalStep[]>(() => JSON.parse(JSON.stringify(submission.approvalSteps)));
-  const [applyToAllActive, setApplyToAllActive] = useState(true);
+  const [applyToAllActive, setApplyToAllActive] = useState(false);
   const [saving, setSaving] = useState(false);
   
   const pageContainerRef = useRef<HTMLDivElement>(null);
@@ -112,7 +144,7 @@ export function AdminAdjustSignaturesModal({
 
   const attach = submission.attachments?.[0];
   const sourceUrl = submission.originalAttachmentUrl || attach?.url || null;
-  const { imageUrl, numPages, loading: pdfLoading, error: pdfError } = usePdfPageImage(sourceUrl, pageNum);
+  const { imageUrl, numPages, loading: pdfLoading, error: pdfError } = usePdfPageImage(sourceUrl, pageNum, attach?.name);
 
   const getPagePos = useCallback((clientX: number, clientY: number, sizeWidthPercent: number) => {
     if (!pageContainerRef.current) return null;
@@ -667,7 +699,9 @@ export function AdminAdjustSignaturesModal({
                       <div
                         onMouseDown={e => onMouseDown(e, step.level, 'checkmark')}
                         onTouchStart={e => onTouchStart(e, step.level, 'checkmark')}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none font-bold text-green-700 border border-dashed border-green-500 bg-transparent rounded flex items-center justify-center`}
+                        className={`absolute cursor-grab active:cursor-grabbing select-none font-bold ${
+                          step.checkmarkBlock === '✗' ? 'text-red-700 border-red-500' : 'text-green-700 border-green-500'
+                        } bg-transparent border border-dashed rounded flex items-center justify-center`}
                         style={{
                           left: `${step.checkmarkX}%`,
                           top: `${step.checkmarkY}%`,

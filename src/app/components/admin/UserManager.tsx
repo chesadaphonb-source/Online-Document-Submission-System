@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
+import { SUPER_ADMIN_EMAILS } from '../../context/SystemContext';
 
 interface DBUser {
   id: string;
@@ -166,7 +167,7 @@ function TeacherCard({ user, onUpdate }: {
               </div>
             </div>
 
-            {currentUser?.email === 'chesadaphon.b@ku.th' && (
+            {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && (
               <div className="pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <p className="text-xs text-purple-700 font-semibold flex items-center gap-1"><Shield size={11} /> สิทธิ์ผู้ดูแลระบบ (Super Admin Only)</p>
                 <button
@@ -494,7 +495,7 @@ export function UserManager() {
                   <span className="text-purple-800 font-medium">{a.name}</span>
                   <span className="text-purple-500">{a.email}</span>
                 </div>
-                {currentUser?.email === 'chesadaphon.b@ku.th' && a.email !== 'chesadaphon.b@ku.th' && (
+                {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && !SUPER_ADMIN_EMAILS.includes(a.email) && (
                   <button
                     onClick={() => demoteToTeacher(a.id, a.name)}
                     className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-white border border-red-200 rounded px-2 py-0.5 shadow-sm transition-all cursor-pointer"

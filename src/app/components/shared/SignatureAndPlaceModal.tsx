@@ -9,7 +9,7 @@ import type { Attachment, ApprovalStep } from '../../data/mockData';
 // ── Render PDF page to image URL (offscreen canvas) ──────────
 // Fetches the PDF as bytes first (avoids pdf.js CORS XHR issue),
 // renders to offscreen canvas, and returns a stable image data URL.
-function usePdfPageImage(url: string | null, pageNum: number) {
+function usePdfPageImage(url: string | null, pageNum: number, fileName?: string) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -18,12 +18,39 @@ function usePdfPageImage(url: string | null, pageNum: number) {
   useEffect(() => {
     if (!url) { setImageUrl(null); return; }
     let cancelled = false;
+    let createdBlobUrl: string | null = null;
     setLoading(true);
     setError(null);
     setImageUrl(null);
 
+    const fnLower = (fileName || '').toLowerCase();
+    const urlLower = (url || '').toLowerCase();
+    const isUrlImage = urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.includes('.jpg?') || urlLower.includes('.jpeg?') || urlLower.includes('.png?');
+    const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png') || isUrlImage;
+
     (async () => {
       try {
+        if (isImage) {
+          let finalUrl = url;
+          if (!url.startsWith('blob:') && !url.startsWith('data:')) {
+            const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            finalUrl = URL.createObjectURL(blob);
+            createdBlobUrl = finalUrl;
+          }
+
+          if (cancelled) {
+            if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
+            return;
+          }
+
+          setImageUrl(finalUrl);
+          setNumPages(1);
+          setLoading(false);
+          return;
+        }
+
         const pdfjsLib = await import('pdfjs-dist');
 
         // Use Vite-bundled worker to avoid CDN version mismatch
@@ -71,15 +98,20 @@ function usePdfPageImage(url: string | null, pageNum: number) {
         }
       } catch (err: any) {
         if (!cancelled && err?.name !== 'RenderingCancelledException') {
-          console.error('[SignatureModal] PDF render error:', err);
-          setError('ไม่สามารถแสดง PDF ได้ (CORS หรือ URL ไม่ถูกต้อง)');
+          console.error('[SignatureModal] PDF/Image render error:', err);
+          setError('ไม่สามารถแสดงไฟล์ได้ (CORS หรือ URL ไม่ถูกต้อง)');
           setLoading(false);
         }
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [url, pageNum]);
+    return () => {
+      cancelled = true;
+      if (createdBlobUrl) {
+        URL.revokeObjectURL(createdBlobUrl);
+      }
+    };
+  }, [url, pageNum, fileName]);
 
   return { imageUrl, numPages, loading, error };
 }
@@ -186,7 +218,7 @@ export function SignatureAndPlaceModal({
   const selectedPdf = pdfOptions[selectedPdfIdx] ?? null;
 
   const { imageUrl: pdfImageUrl, numPages, loading: pdfLoading, error: pdfError } =
-    usePdfPageImage(selectedPdf?.url ?? null, pdfPage);
+    usePdfPageImage(selectedPdf?.url ?? null, pdfPage, selectedPdf?.label);
 
   // Reset page when switching file
   useEffect(() => { setPdfPage(1); }, [selectedPdfIdx]);
@@ -844,7 +876,9 @@ export function SignatureAndPlaceModal({
                     <div
                       onMouseDown={(e) => onMouseDown(e, 'checkmark')}
                       onTouchStart={(e) => onTouchStart(e, 'checkmark')}
-                      className="absolute cursor-grab active:cursor-grabbing select-none font-extrabold text-green-700 border border-dashed border-green-500 bg-transparent rounded flex items-center justify-center"
+                      className={`absolute cursor-grab active:cursor-grabbing select-none font-extrabold ${
+                        checkmarkVal === '✗' ? 'text-red-700 border-red-500' : 'text-green-700 border-green-500'
+                      } bg-transparent border border-dashed rounded flex items-center justify-center`}
                       style={{
                         left: `${checkmarkPos.x}%`,
                         top: `${checkmarkPos.y}%`,

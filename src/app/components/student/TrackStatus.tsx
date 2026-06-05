@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSubmissions } from '../../context/SubmissionsContext';
 import { StatusBadge } from '../shared/StatusBadge';
 import { Submission, formatDateTime, formTemplates } from '../../data/mockData';
-import { generateApprovalPDF } from '../../lib/generateApprovalPDF';
+import { generateSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
 import { formatMoney } from '../../lib/exportUtils';
 import {
   FileText, Search, ChevronDown, ChevronUp, CheckCircle,
@@ -181,13 +181,17 @@ function SubmissionCard({ sub }: { sub: Submission }) {
   };
 
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const handleDownloadCert = async () => {
+  const handleDownloadSignedDoc = async () => {
+    const pdfAttach = sub.attachments?.find(a => a.type === 'pdf');
+    if (!pdfAttach) {
+      toast.error('ไม่พบเอกสาร PDF แนบในคำร้องนี้');
+      return;
+    }
     setDownloadingPdf(true);
     try {
-      await generateApprovalPDF(sub);
-      toast.success('ดาวน์โหลดใบรับรองเรียบร้อยแล้ว ✅');
+      await generateSignedAttachmentPDF(sub, pdfAttach.url, pdfAttach.name);
     } catch (e) {
-      toast.error('ไม่สามารถสร้าง PDF ได้ ลองใหม่');
+      toast.error('ไม่สามารถสร้าง PDF พร้อมลายเซ็นได้');
     } finally {
       setDownloadingPdf(false);
     }
@@ -203,14 +207,14 @@ function SubmissionCard({ sub }: { sub: Submission }) {
             <span className="text-white text-xs font-medium">อนุมัติแล้ว — เลขอ้างอิง: <span className="font-mono">{sub.referenceNumber}</span></span>
           </div>
           <button
-            onClick={handleDownloadCert}
+            onClick={handleDownloadSignedDoc}
             disabled={downloadingPdf}
             className="flex items-center gap-1.5 px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs transition-all disabled:opacity-60 shrink-0"
           >
             {downloadingPdf
               ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
               : <Download size={12} />}
-            ใบรับรอง PDF
+            ดาวน์โหลดคำร้องพร้อมลายเซ็น
           </button>
         </div>
       )}
@@ -296,12 +300,12 @@ function SubmissionCard({ sub }: { sub: Submission }) {
         </button>
         {isApproved && !sub.referenceNumber && (
           <button
-            onClick={handleDownloadCert}
+            onClick={handleDownloadSignedDoc}
             disabled={downloadingPdf}
             className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-green-600 hover:bg-green-50 border-l border-gray-100 transition-colors shrink-0 disabled:opacity-60"
           >
             {downloadingPdf ? <div className="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /> : <Download size={13} />}
-            ใบรับรอง
+            ดาวน์โหลดคำร้องพร้อมลายเซ็น
           </button>
         )}
         {canResubmit && (
@@ -331,6 +335,28 @@ function SubmissionCard({ sub }: { sub: Submission }) {
               })}
             </div>
           </div>
+
+          {/* Attachments */}
+          {sub.attachments && sub.attachments.length > 0 && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+              <p className="text-xs font-medium text-gray-600 mb-2">เอกสารแนบ</p>
+              <div className="space-y-1.5">
+                {sub.attachments.map((file, i) => (
+                  <a
+                    key={i}
+                    href={file.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs text-[#1a5c2e] hover:underline font-medium"
+                  >
+                    <Paperclip size={12} />
+                    {file.name} ({file.size})
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <ApprovalTimeline submission={sub} />
         </div>
       )}

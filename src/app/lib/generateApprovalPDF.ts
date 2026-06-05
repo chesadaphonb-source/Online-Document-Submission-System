@@ -510,11 +510,20 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
       const fontSize = step.checkmarkSize || 15;
       const size_mm = fontSize * 0.352778; // Convert pt to mm
       
-      // Draw checkmark using vector lines instead of text to avoid font glyph issues (✓ not supported in THSarabun)
-      doc.setDrawColor(22, 101, 52); // green checkmark color
-      doc.setLineWidth(size_mm * 0.15); // proportional thickness
-      doc.line(cx + size_mm * 0.15, cy + size_mm * 0.55, cx + size_mm * 0.4, cy + size_mm * 0.8);
-      doc.line(cx + size_mm * 0.4, cy + size_mm * 0.8, cx + size_mm * 0.85, cy + size_mm * 0.25);
+      if (step.checkmarkBlock === '✗') {
+        // Draw cross mark (gabarot) in red
+        doc.setDrawColor(185, 28, 28); // red-700
+        doc.setLineWidth(size_mm * 0.15);
+        doc.line(cx + size_mm * 0.2, cy + size_mm * 0.2, cx + size_mm * 0.8, cy + size_mm * 0.8);
+        doc.line(cx + size_mm * 0.2, cy + size_mm * 0.8, cx + size_mm * 0.8, cy + size_mm * 0.2);
+      } else {
+        // Draw checkmark in green
+        const isThick = step.checkmarkBlock === '✔';
+        doc.setDrawColor(22, 101, 52); // green checkmark color
+        doc.setLineWidth(size_mm * (isThick ? 0.27 : 0.15)); // thicker lines for bold checkmark
+        doc.line(cx + size_mm * 0.15, cy + size_mm * 0.55, cx + size_mm * 0.4, cy + size_mm * 0.8);
+        doc.line(cx + size_mm * 0.4, cy + size_mm * 0.8, cx + size_mm * 0.85, cy + size_mm * 0.25);
+      }
     }
   }
 }
@@ -525,7 +534,9 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
 export async function previewSignedAttachmentPDF(submission: Submission, attachmentUrl: string, fileName: string): Promise<string> {
   const sourceUrl = submission.originalAttachmentUrl || attachmentUrl;
   const fnLower = fileName.toLowerCase();
-  const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
+  const sourceUrlLower = sourceUrl.toLowerCase();
+  const isUrlImage = sourceUrlLower.endsWith('.jpg') || sourceUrlLower.endsWith('.jpeg') || sourceUrlLower.endsWith('.png') || sourceUrlLower.includes('.jpg?') || sourceUrlLower.includes('.jpeg?') || sourceUrlLower.includes('.png?');
+  const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png') || isUrlImage;
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   doc.addFileToVFS('THSarabun.ttf', THSarabun_Base64);
@@ -540,7 +551,8 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
       const blob = await res.blob();
       imgDataUrl = URL.createObjectURL(blob);
     }
-    const format = fnLower.endsWith('.png') ? 'PNG' : 'JPEG';
+    const isPng = fnLower.endsWith('.png') || sourceUrlLower.endsWith('.png') || sourceUrlLower.includes('.png?');
+    const format = isPng ? 'PNG' : 'JPEG';
     doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
     await drawSignaturesAndTexts(doc, submission);
     if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
@@ -582,7 +594,9 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
   try {
     const sourceUrl = submission.originalAttachmentUrl || attachmentUrl;
     const fnLower = fileName.toLowerCase();
-    const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
+    const sourceUrlLower = sourceUrl.toLowerCase();
+    const isUrlImage = sourceUrlLower.endsWith('.jpg') || sourceUrlLower.endsWith('.jpeg') || sourceUrlLower.endsWith('.png') || sourceUrlLower.includes('.jpg?') || sourceUrlLower.includes('.jpeg?') || sourceUrlLower.includes('.png?');
+    const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png') || isUrlImage;
 
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     
@@ -603,7 +617,8 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
       }
 
       // Add image as background A4: 210mm x 297mm
-      const format = fnLower.endsWith('.png') ? 'PNG' : 'JPEG';
+      const isPng = fnLower.endsWith('.png') || sourceUrlLower.endsWith('.png') || sourceUrlLower.includes('.png?');
+      const format = isPng ? 'PNG' : 'JPEG';
       doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
 
       // Superimpose signatures & text blocks
@@ -683,7 +698,9 @@ export async function generateAdjustedPDFBlob(
   fileName: string,
 ): Promise<Blob> {
   const fnLower = fileName.toLowerCase();
-  const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png');
+  const urlLower = (attachmentUrl || '').toLowerCase();
+  const isUrlImage = urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.includes('.jpg?') || urlLower.includes('.jpeg?') || urlLower.includes('.png?');
+  const isImage = fnLower.endsWith('.jpg') || fnLower.endsWith('.jpeg') || fnLower.endsWith('.png') || isUrlImage;
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   doc.addFileToVFS('THSarabun.ttf', THSarabun_Base64);
@@ -698,7 +715,8 @@ export async function generateAdjustedPDFBlob(
       const blob = await res.blob();
       imgDataUrl = URL.createObjectURL(blob);
     }
-    const format = fnLower.endsWith('.png') ? 'PNG' : 'JPEG';
+    const isPng = fnLower.endsWith('.png') || urlLower.endsWith('.png') || urlLower.includes('.png?');
+    const format = isPng ? 'PNG' : 'JPEG';
     doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
     await drawSignaturesAndTexts(doc, submission);
     if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
