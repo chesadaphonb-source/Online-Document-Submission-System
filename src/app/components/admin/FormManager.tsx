@@ -21,6 +21,7 @@ interface FormItem {
   required_docs: string[];
   workflow_steps: string[];
   campus?: string;
+  degree_level?: string;  // 'all' | 'bachelor' | 'master' | 'doctorate'
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -41,6 +42,20 @@ const CATEGORY_COLORS: Record<string, string> = {
   academic: 'bg-green-100 text-green-700',
 };
 
+const DEGREE_LABELS: Record<string, string> = {
+  all: 'ทุกระดับ',
+  bachelor: 'ปริญญาตรี',
+  master: 'ปริญญาโท',
+  doctorate: 'ปริญญาเอก',
+};
+
+const DEGREE_COLORS: Record<string, string> = {
+  all: 'bg-gray-100 text-gray-600',
+  bachelor: 'bg-blue-100 text-blue-700',
+  master: 'bg-amber-100 text-amber-700',
+  doctorate: 'bg-rose-100 text-rose-700',
+};
+
 // ── Upload Modal ─────────────────────────────────────────────
 function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [name, setName] = useState('');
@@ -50,6 +65,7 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   const [uploading, setUploading] = useState(false);
   const [workflowSteps, setWorkflowSteps] = useState<string[]>(['advisor', 'department_head', 'dean']);
   const [campus, setCampus] = useState('bangkhen');
+  const [degreeLevel, setDegreeLevel] = useState('all');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,6 +108,7 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
           is_active: true,
           workflow_steps: workflowSteps,
           campus,
+          degree_level: degreeLevel,
         });
         if (dbError) throw dbError;
       } else {
@@ -137,6 +154,16 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               <option value="bangkhen">วิทยาเขตบางเขน (Bang Khen)</option>
               <option value="kamphaengsaen">วิทยาเขตกำแพงแสน (Kamphaeng Saen)</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1.5 font-medium">ระดับการศึกษา</label>
+            <select value={degreeLevel} onChange={e => setDegreeLevel(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 bg-white">
+              {Object.entries(DEGREE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">เลือก "ทุกระดับ" หากฟอร์มนี้ใช้ได้กับทุกระดับการศึกษา</p>
           </div>
           <div>
             <label className="block text-sm text-gray-700 mb-1.5 font-medium">คำอธิบาย</label>
@@ -381,6 +408,11 @@ function FormCard({ form, onEdit, onDelete, onToggle }: {
               }`}>
                 {form.campus === 'kamphaengsaen' ? 'กำแพงแสน' : 'บางเขน'}
               </span>
+              {form.degree_level && form.degree_level !== 'all' && (
+                <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 font-medium ${DEGREE_COLORS[form.degree_level] || 'bg-gray-100 text-gray-600'}`}>
+                  🎓 {DEGREE_LABELS[form.degree_level] || form.degree_level}
+                </span>
+              )}
             </div>
             {form.description && <p className="text-xs text-gray-500 mt-1">{form.description}</p>}
             <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">

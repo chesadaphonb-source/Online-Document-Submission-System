@@ -88,6 +88,8 @@ function rowToSubmission(row: any): Submission {
     signatureAdjustedAt: row.signature_adjusted_at,
     signatureAdjustedBy: row.signature_adjusted_by,
     originalAttachmentUrl: row.original_attachment_url,
+    studentLevel: row.student_level || undefined,
+    studentYear: row.student_year || undefined,
   };
 }
 
@@ -123,6 +125,8 @@ function submissionToRow(sub: Submission) {
     signature_adjusted_at: sub.signatureAdjustedAt || null,
     signature_adjusted_by: sub.signatureAdjustedBy || null,
     original_attachment_url: sub.originalAttachmentUrl || null,
+    student_level: sub.studentLevel || null,
+    student_year: sub.studentYear || null,
   };
 }
 
@@ -147,6 +151,8 @@ async function dbUpdate(id: string, changes: Partial<Submission>) {
   if (changes.signatureAdjustedAt !== undefined) row.signature_adjusted_at = changes.signatureAdjustedAt;
   if (changes.signatureAdjustedBy !== undefined) row.signature_adjusted_by = changes.signatureAdjustedBy;
   if (changes.originalAttachmentUrl !== undefined) row.original_attachment_url = changes.originalAttachmentUrl;
+  if (changes.studentLevel !== undefined) row.student_level = changes.studentLevel;
+  if (changes.studentYear !== undefined) row.student_year = changes.studentYear;
   row.updated_at = new Date().toISOString();
   await supabase.from('submissions').update(row).eq('id', id);
 }
@@ -205,12 +211,14 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
       submissionName: sub.formName,
       type: 'new_submission',
       title: 'มีคำร้องใหม่รอรับเรื่อง',
-      message: `${sub.studentName} ยื่น${sub.formName}`,
+      message: `${sub.studentName} (ระดับ${sub.studentLevel || 'ป.ตรี'} ชั้นปี ${sub.studentYear || 1}) ยื่น${sub.formName}`,
       actionUrl: '/admin/inbox',
       studentName: sub.studentName,
       studentEmail: sub.studentEmail,
       department: sub.department,
       studentId: sub.studentId?.replace('student_', '') || sub.studentEmail?.replace('@ku.th', '') || '',
+      studentLevel: sub.studentLevel,
+      studentYear: sub.studentYear,
     });
     // ── แจ้งนิสิตว่ายื่นสำเร็จ (ส่งเมลยืนยัน) ──────────────
     const submittedDate = new Date(sub.submittedAt).toLocaleString('th-TH', {
@@ -224,12 +232,14 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
       submissionName: sub.formName,
       type: 'status_update',
       title: `✅ ยืนยันการยื่นคำร้อง: ${sub.formName}`,
-      message: `คำร้องของคุณได้รับการบันทึกเรียบร้อยแล้ว\n\n📄 ประเภทคำร้อง: ${sub.formName}\n👤 ชื่อ: ${sub.studentName}\n🏫 ภาควิชา: ${sub.department}\n📅 วันที่ยื่น: ${submittedDate}\n\nขั้นตอนถัดไป: เจ้าหน้าที่จะรับเรื่องและส่งต่อให้อาจารย์พิจารณา คุณสามารถติดตามสถานะได้ที่ระบบ KU-Paper`,
+      message: `คำร้องของคุณได้รับการบันทึกเรียบร้อยแล้ว\n\n📄 ประเภทคำร้อง: ${sub.formName}\n👤 ชื่อ: ${sub.studentName}\n🏫 ภาควิชา: ${sub.department}\n🎓 ระดับ: ${sub.studentLevel || 'ปริญญาตรี'} ชั้นปี ${sub.studentYear || 1}\n📅 วันที่ยื่น: ${submittedDate}\n\nขั้นตอนถัดไป: เจ้าหน้าที่จะรับเรื่องและส่งต่อให้อาจารย์พิจารณา คุณสามารถติดตามสถานะได้ที่ระบบ KU-Paper`,
       actionUrl: '/student/track',
       studentName: sub.studentName,
       studentEmail: sub.studentEmail,
       department: sub.department,
       studentId: sub.studentId?.replace('student_', '') || sub.studentEmail?.replace('@ku.th', '') || '',
+      studentLevel: sub.studentLevel,
+      studentYear: sub.studentYear,
     });
   }, [addNotification]);
 
@@ -277,8 +287,14 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
         submissionName: sub.formName,
         type: 'forwarded_to_teacher',
         title: 'มีคำร้องรอการพิจารณา',
-        message: `${sub.formName} ของ ${sub.studentName} ถูกส่งมาให้ท่านพิจารณา`,
+        message: `${sub.formName} ของ ${sub.studentName} (${sub.studentLevel || 'ป.ตรี'} ชั้นปี ${sub.studentYear || 1}) ถูกส่งมาให้ท่านพิจารณา`,
         actionUrl: '/teacher/approvals',
+        studentName: sub.studentName,
+        studentEmail: sub.studentEmail,
+        department: sub.department,
+        studentId: sub.studentId?.replace('student_', '') || '',
+        studentLevel: sub.studentLevel,
+        studentYear: sub.studentYear,
       });
     }
     notifs.push({

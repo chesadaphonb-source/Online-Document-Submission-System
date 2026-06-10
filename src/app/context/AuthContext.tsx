@@ -6,7 +6,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 interface AuthContextType {
   currentUser: User | null;
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string; user?: User }>;
-  loginAsStudent: (name: string, studentId: string, department?: string, studentEmail?: string, campus?: string) => { success: boolean; user: User };
+  loginAsStudent: (name: string, studentId: string, department?: string, studentEmail?: string, campus?: string, level?: string, year?: number) => { success: boolean; user: User };
   logout: () => Promise<void>;
   isLoading: boolean;
   mode: 'supabase' | 'mock';
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Student Guest Login (ไม่ต้อง password) ────────────────
-  const loginAsStudent = (name: string, studentId: string, department?: string, studentEmail?: string, campus?: string): { success: boolean; user: User } => {
+  const loginAsStudent = (name: string, studentId: string, department?: string, studentEmail?: string, campus?: string, level?: string, year?: number): { success: boolean; user: User } => {
     const guestUser: User = {
       id: `student_${studentId}`,
       name: name.trim(),
@@ -137,8 +137,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       department: department || '',
       faculty: 'คณะสิ่งแวดล้อม',
       studentId: studentId,
-      level: 'ปริญญาตรี',
-      year: 1,
+      level: level || 'ปริญญาตรี',
+      year: year || 1,
       phone: '',
       academicYear: String(new Date().getFullYear() + 543),
       advisorId: '',

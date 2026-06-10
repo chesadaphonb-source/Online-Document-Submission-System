@@ -21,6 +21,8 @@ interface LibraryForm {
   file_name?: string;
   required_docs?: string[];
   workflow_steps?: string[];
+  campus?: string;
+  degree_level?: string;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -168,6 +170,20 @@ const categoryColors: Record<string, string> = {
   administrative: 'bg-purple-100 text-purple-700',
 };
 
+const DEGREE_LABELS: Record<string, string> = {
+  all: 'ทุกระดับ',
+  bachelor: 'ปริญญาตรี',
+  master: 'ปริญญาโท',
+  doctorate: 'ปริญญาเอก',
+};
+
+const DEGREE_COLORS: Record<string, string> = {
+  all: 'bg-gray-100 text-gray-600 border border-gray-200',
+  bachelor: 'bg-blue-100 text-blue-700 border border-blue-200',
+  master: 'bg-amber-100 text-amber-700 border border-amber-200',
+  doctorate: 'bg-rose-100 text-rose-700 border border-rose-200',
+};
+
 // Draft storage key per user
 const getDraftKey = (userId: string) => `ku_paper_draft_${userId}`;
 
@@ -194,6 +210,17 @@ export function SubmitForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [selectedCampus, setSelectedCampus] = useState((currentUser as any)?.campus || 'bangkhen');
+  const mapLevelToDbDegreeLevel = (level?: string): string => {
+    if (level === 'ปริญญาตรี') return 'bachelor';
+    if (level === 'ปริญญาโท') return 'master';
+    if (level === 'ปริญญาเอก') return 'doctorate';
+    return 'all';
+  };
+  const [selectedDegreeLevel, setSelectedDegreeLevel] = useState<string>(
+    currentUser?.role === 'student'
+      ? mapLevelToDbDegreeLevel((currentUser as any).level)
+      : 'all'
+  );
   const [draftInfo, setDraftInfo] = useState<DraftData | null>(null);
   const [libraryForms, setLibraryForms] = useState<LibraryForm[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -246,7 +273,7 @@ export function SubmitForm() {
   // โหลด required_docs และ workflow_steps จาก library
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.from('forms_library').select('id,name,file_name,required_docs,workflow_steps,campus')
+    supabase.from('forms_library').select('id,name,file_name,required_docs,workflow_steps,campus,degree_level')
       .eq('is_active', true)
       .then(({ data }) => { if (data) setLibraryForms(data); });
   }, [currentUser]);
@@ -309,9 +336,32 @@ export function SubmitForm() {
   const filteredForms = formTemplates.filter(f => {
     const matchSearch = f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       f.nameEn.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchSearch) return false;
+
     const matchCategory = filterCategory === 'all' || f.category === filterCategory;
-    const matchCampus = (f.campus || 'bangkhen') === selectedCampus;
-    return matchSearch && matchCategory && matchCampus;
+    if (!matchCategory) return false;
+
+    // หาข้อมูลวิทยาเขตและระดับการศึกษาที่บันทึกไว้ในฐานข้อมูล (Supabase)
+    const dbRecord = libraryForms.find(lf => {
+      const fn = normStr(lf.file_name || '');
+      const fn2 = normStr(lf.name || '');
+      const sid = normStr(f.id);
+      const sname = normStr(f.name);
+      return fn === normStr(f.id + '.pdf')
+        || fn === normStr(f.name + '.pdf')
+        || fn.includes(sid)
+        || fn.includes(sname)
+        || fn2 === sname
+        || lf.name === f.name;
+    });
+
+    const campus = dbRecord ? dbRecord.campus : (f.campus || 'bangkhen');
+    const degreeLevel = dbRecord ? (dbRecord as any).degree_level : 'all';
+
+    const matchCampus = campus === selectedCampus;
+    const matchDegree = selectedDegreeLevel === 'all' || degreeLevel === 'all' || degreeLevel === selectedDegreeLevel;
+
+    return matchCampus && matchDegree;
   });
 
   const validateStep1 = () => selectedForm !== null;
@@ -633,20 +683,50 @@ export function SubmitForm() {
           <div className="p-5">
             <h3 className="text-green-800 mb-4">เลือกประเภทคำร้อง</h3>
 
-            {/* Campus selector segmented tabs */}
-            <div className="flex bg-gray-50 border border-gray-200/80 p-1 rounded-xl w-full sm:w-fit mb-4">
-              <button onClick={() => setSelectedCampus('bangkhen')}
-                className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  selectedCampus === 'bangkhen' ? 'bg-[#1a5c2e] text-white shadow-sm' : 'text-gray-500 hover:text-green-700'
-                }`}>
-                วิทยาเขตบางเขน
-              </button>
-              <button onClick={() => setSelectedCampus('kamphaengsaen')}
-                className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  selectedCampus === 'kamphaengsaen' ? 'bg-purple-700 text-white shadow-sm' : 'text-gray-500 hover:text-purple-700'
-                }`}>
-                วิทยาเขตกำแพงแสน
-              </button>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              {/* Campus selector segmented tabs */}
+              <div className="flex bg-gray-50 border border-gray-200/80 p-1 rounded-xl w-full sm:w-fit">
+                <button onClick={() => setSelectedCampus('bangkhen')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    selectedCampus === 'bangkhen' ? 'bg-[#1a5c2e] text-white shadow-sm' : 'text-gray-500 hover:text-green-700'
+                  }`}>
+                  วิทยาเขตบางเขน
+                </button>
+                <button onClick={() => setSelectedCampus('kamphaengsaen')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    selectedCampus === 'kamphaengsaen' ? 'bg-purple-700 text-white shadow-sm' : 'text-gray-500 hover:text-purple-700'
+                  }`}>
+                  วิทยาเขตกำแพงแสน
+                </button>
+              </div>
+
+              {/* Degree level selector segmented tabs */}
+              <div className="flex bg-gray-50 border border-gray-200/80 p-1 rounded-xl w-full sm:w-fit">
+                <button onClick={() => setSelectedDegreeLevel('all')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    selectedDegreeLevel === 'all' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  ทุกระดับ
+                </button>
+                <button onClick={() => setSelectedDegreeLevel('bachelor')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    selectedDegreeLevel === 'bachelor' ? 'bg-blue-700 text-white shadow-sm' : 'text-gray-500 hover:text-blue-700'
+                  }`}>
+                  ป.ตรี
+                </button>
+                <button onClick={() => setSelectedDegreeLevel('master')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    selectedDegreeLevel === 'master' ? 'bg-amber-700 text-white shadow-sm' : 'text-gray-500 hover:text-amber-700'
+                  }`}>
+                  ป.โท
+                </button>
+                <button onClick={() => setSelectedDegreeLevel('doctorate')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    selectedDegreeLevel === 'doctorate' ? 'bg-rose-700 text-white shadow-sm' : 'text-gray-500 hover:text-rose-700'
+                  }`}>
+                  ป.เอก
+                </button>
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="relative flex-1">
@@ -701,10 +781,30 @@ export function SubmitForm() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 leading-relaxed">{form.description}</p>
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[form.category]}`}>
                           {categoryLabels[form.category]}
                         </span>
+                        {(() => {
+                          const dbRec = libraryForms.find(lf => {
+                            const fn = normStr(lf.file_name || '');
+                            const fn2 = normStr(lf.name || '');
+                            const sid = normStr(form.id);
+                            const sname = normStr(form.name);
+                            return fn === normStr(form.id + '.pdf')
+                              || fn === normStr(form.name + '.pdf')
+                              || fn.includes(sid)
+                              || fn.includes(sname)
+                              || fn2 === sname
+                              || lf.name === form.name;
+                          });
+                          const degreeLvl = dbRec ? (dbRec as any).degree_level : 'all';
+                          return (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${DEGREE_COLORS[degreeLvl] || DEGREE_COLORS.all}`}>
+                              {DEGREE_LABELS[degreeLvl] || 'ทุกระดับ'}
+                            </span>
+                          );
+                        })()}
                         <span className="text-xs text-gray-400">~{form.estimatedDays} วัน</span>
                       </div>
                     </div>

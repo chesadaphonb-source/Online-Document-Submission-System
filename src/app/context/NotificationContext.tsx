@@ -39,6 +39,8 @@ export interface Notification {
   studentEmail?: string;
   department?: string;
   studentId?: string;
+  studentLevel?: string;    // ระดับการศึกษา: ปริญญาตรี / ปริญญาโท / ปริญญาเอก
+  studentYear?: number;     // ชั้นปี
 }
 
 // ============================================================

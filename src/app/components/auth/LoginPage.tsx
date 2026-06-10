@@ -32,6 +32,8 @@ export function LoginPage() {
   const [studentDept, setStudentDept] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
   const [studentCampus, setStudentCampus] = useState('bangkhen');
+  const [studentLevel, setStudentLevel] = useState('ปริญญาตรี');
+  const [studentYear, setStudentYear] = useState('1');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [adminClicks, setAdminClicks] = useState(0);
@@ -45,13 +47,14 @@ export function LoginPage() {
     }
   }, [currentUser, authLoading, navigate]);
 
-  const resetStudent = () => { setStudentName(''); setStudentId(''); setStudentDept(''); setStudentEmail(''); setStudentCampus('bangkhen'); };
+  const resetStudent = () => { setStudentName(''); setStudentId(''); setStudentDept(''); setStudentEmail(''); setStudentCampus('bangkhen'); setStudentLevel('ปริญญาตรี'); setStudentYear('1'); };
 
   const doLogin = async () => {
     if (selectedRole?.key === 'student') {
       if (!studentName.trim() || !studentId.trim()) { toast.error('กรุณากรอกชื่อและรหัสนิสิต'); return; }
       if (!studentDept) { toast.error('กรุณาเลือกภาควิชา'); return; }
-      const result = loginAsStudent(studentName, studentId, studentDept, studentEmail, studentCampus);
+      if (!studentYear.trim() || isNaN(Number(studentYear)) || Number(studentYear) < 1) { toast.error('กรุณากรอกชั้นปีที่ถูกต้อง'); return; }
+      const result = loginAsStudent(studentName, studentId, studentDept, studentEmail, studentCampus, studentLevel, Number(studentYear));
       toast.success(`ยินดีต้อนรับ, ${result.user.name}`);
       navigate('/student/dashboard'); return;
     }
@@ -296,6 +299,24 @@ export function LoginPage() {
                           <option value="ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม">ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม</option>
                           <option value="ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน">ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน</option>
                         </select>
+                      </div>
+                      {/* ระดับการศึกษา */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1.5 font-medium">ระดับการศึกษา <span className="text-red-500 ml-1">*</span></label>
+                          <select value={studentLevel} onChange={e => setStudentLevel(e.target.value)}
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all bg-white">
+                            <option value="ปริญญาตรี">ปริญญาตรี</option>
+                            <option value="ปริญญาโท">ปริญญาโท</option>
+                            <option value="ปริญญาเอก">ปริญญาเอก</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1.5 font-medium">ชั้นปี <span className="text-red-500 ml-1">*</span></label>
+                          <input type="number" min={1} max={8} value={studentYear} onChange={e => setStudentYear(e.target.value)}
+                            placeholder="เช่น 1"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all"/>
+                        </div>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-700 mb-1.5 font-medium">

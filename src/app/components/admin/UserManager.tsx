@@ -140,9 +140,9 @@ function TeacherCard({ user, onUpdate }: {
               </p>
             )}
             <div className="flex flex-wrap gap-1 mt-2">
-              {user.is_advisor && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">อาจารย์ที่ปรึกษา</span>}
-              {user.is_department_head && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">หัวหน้าภาค</span>}
-              {user.is_dean && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">คณบดี</span>}
+              {user.is_advisor && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">อาจารย์ที่ปรึกษา</span>}
+              {user.is_department_head && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">หัวหน้าภาค — {user.department || 'ไม่ระบุสาขา'}</span>}
+              {user.is_dean && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">คณบดี (ทุกสาขา)</span>}
             </div>
           </div>
         </div>
@@ -254,6 +254,7 @@ export function UserManager() {
   const [students, setStudents] = useState<SubmittedStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
   const { currentUser } = useAuth();
 
   const demoteToTeacher = async (userId: string, userName: string) => {
@@ -444,11 +445,14 @@ export function UserManager() {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...changes } : u));
   };
 
-  const teachers = users.filter(u => u.role === 'teacher' && (
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    (u.department || '').toLowerCase().includes(search.toLowerCase())
-  ));
+  const teachers = users.filter(u => {
+    if (u.role !== 'teacher') return false;
+    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase()) ||
+      (u.department || '').toLowerCase().includes(search.toLowerCase());
+    const matchDept = selectedDeptFilter === 'all' || u.is_dean || u.is_department_head || u.department === selectedDeptFilter;
+    return matchSearch && matchDept;
+  });
 
   const admins = users.filter(u => u.role === 'admin');
 
@@ -527,11 +531,28 @@ export function UserManager() {
         })}
       </div>
 
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input type="text" placeholder={`ค้นหา${tab === 'teacher' ? 'อาจารย์' : 'นิสิต'}...`}
-          value={search} onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 bg-white" />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input type="text" placeholder={`ค้นหา${tab === 'teacher' ? 'อาจารย์' : 'นิสิต'}...`}
+            value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 bg-white" />
+        </div>
+        {tab === 'teacher' && (
+          <div className="w-full sm:w-64">
+            <select
+              value={selectedDeptFilter}
+              onChange={e => setSelectedDeptFilter(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 bg-white cursor-pointer font-medium text-gray-700"
+            >
+              <option value="all">ทุกภาควิชา / สาขา</option>
+              <option value="ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม">ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม</option>
+              <option value="ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม">ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม</option>
+              <option value="ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน">ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน</option>
+              <option value="สำนักงานคณะ">สำนักงานคณะ (Admin)</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {loading ? (

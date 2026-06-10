@@ -136,6 +136,8 @@ export interface Submission {
   studentEmail: string;
   department: string;
   faculty: string;
+  studentLevel?: string;   // ระดับการศึกษา: ปริญญาตรี / ปริญญาโท / ปริญญาเอก
+  studentYear?: number;    // ชั้นปี
   status: SubmissionStatus;
   submittedAt: string;
   updatedAt: string;
