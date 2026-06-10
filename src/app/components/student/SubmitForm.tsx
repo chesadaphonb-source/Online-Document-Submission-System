@@ -41,24 +41,36 @@ const FORM_INSTRUCTIONS: Record<string, string[]> = {
   'tuition_fee_deferment.pdf': ['กรอกจำนวนเงินและงวดที่ต้องการผ่อน', 'แนบหลักฐานทางการเงิน', 'รอการพิจารณาจากฝ่ายการเงิน'],
 };
 
-function FormDownloadSection() {
+function FormDownloadSection({
+  selectedCampus,
+  selectedDegreeLevel,
+}: {
+  selectedCampus: string;
+  selectedDegreeLevel: string;
+}) {
   const [forms, setForms] = useState<LibraryForm[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [expandedForm, setExpandedForm] = useState<string | null>(null);
-  const { currentUser } = useAuth();
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.from('forms_library').select('id,name,description,category,file_url,file_name,required_docs,campus')
+    supabase.from('forms_library').select('id,name,description,category,file_url,file_name,required_docs,campus,degree_level')
       .eq('is_active', true)
       .order('category')
       .then(({ data }) => {
         if (data) {
-          const userCampus = (currentUser as any)?.campus || 'bangkhen';
-          setForms(data.filter((f: any) => !f.campus || f.campus === userCampus));
+          setForms(data.filter((f: any) => {
+            const campus = f.campus || 'bangkhen';
+            const degreeLevel = f.degree_level || 'all';
+
+            const matchCampus = campus === selectedCampus;
+            const matchDegree = selectedDegreeLevel === 'all' || degreeLevel === 'all' || degreeLevel === selectedDegreeLevel;
+
+            return matchCampus && matchDegree;
+          }));
         }
       });
-  }, [currentUser]);
+  }, [selectedCampus, selectedDegreeLevel]);
 
   if (forms.length === 0) return null;
 
@@ -682,7 +694,7 @@ export function SubmitForm() {
       </div>
 
       {/* Form Download Section */}
-      <FormDownloadSection />
+      <FormDownloadSection selectedCampus={selectedCampus} selectedDegreeLevel={selectedDegreeLevel} />
 
       {/* Draft Banner */}
       {hasDraft && draftInfo && (
