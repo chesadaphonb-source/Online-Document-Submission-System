@@ -86,24 +86,37 @@ function TeacherCard({ user, onUpdate }: {
     try {
       const isSuperAdmin = !!currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email);
       const emailChanged = editEmail.trim().toLowerCase() !== user.email.toLowerCase();
+      const passwordChanged = editPassword !== user.plain_password;
 
-      if (emailChanged && isSuperAdmin) {
-        if (!editEmail.trim()) {
-          throw new Error('กรุณากรอกอีเมล');
+      if ((emailChanged && isSuperAdmin) || passwordChanged) {
+        const payload: any = {
+          userId: user.id,
+          adminEmail: currentUser?.email
+        };
+
+        if (emailChanged && isSuperAdmin) {
+          if (!editEmail.trim()) {
+            throw new Error('กรุณากรอกอีเมล');
+          }
+          payload.newEmail = editEmail.trim().toLowerCase();
         }
+
+        if (passwordChanged) {
+          if (!editPassword) {
+            throw new Error('กรุณากรอกรหัสผ่าน');
+          }
+          payload.newPassword = editPassword;
+        }
+
         const response = await fetch('/api/update-user-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user.id,
-            newEmail: editEmail.trim().toLowerCase(),
-            adminEmail: currentUser.email
-          })
+          body: JSON.stringify(payload)
         });
 
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data.error || 'เกิดข้อผิดพลาดในการแก้ไขอีเมล');
+          throw new Error(data.error || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลผู้ใช้');
         }
       }
 

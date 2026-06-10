@@ -19,22 +19,35 @@ export default async function handler(req, res) {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
-  const { userId, newEmail, adminEmail } = req.body;
+  const { userId, newEmail, newPassword, adminEmail } = req.body;
 
-  if (!userId || !newEmail || !adminEmail) {
-    return res.status(400).json({ error: 'กรุณากรอกข้อมูล userId, newEmail และ adminEmail ให้ครบถ้วน' });
-  }
-
-  // Check super admin permission
-  if (!SUPER_ADMIN_EMAILS.includes(adminEmail.trim().toLowerCase())) {
-    return res.status(403).json({ error: 'สิทธิ์การใช้งานจำกัดเฉพาะ Super Admin เท่านั้น' });
+  if (!userId || !adminEmail) {
+    return res.status(400).json({ error: 'กรุณากรอกข้อมูล userId และ adminEmail ให้ครบถ้วน' });
   }
 
   try {
+    // Check requester role
+    const { data: adminUser, error: adminErr } = await supabaseAdmin
+      .from('users')
+      .select('role')
+      .eq('email', adminEmail.trim().toLowerCase())
+      .single();
+
+    const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(adminEmail.trim().toLowerCase());
+    const isAdmin = adminUser?.role === 'admin' || isSuperAdmin;
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'สิทธิ์การใช้งานจำกัดเฉพาะผู้ดูแลระบบ (Admin) เท่านั้น' });
+    }
+
+    if (newEmail && !isSuperAdmin) {
+      return res.status(403).json({ error: 'สิทธิ์การเปลี่ยนอีเมลจำกัดเฉพาะ Super Admin เท่านั้น' });
+    }
+
     // 1. ค้นหาผู้ใช้เพื่อตรวจสอบว่ามีอยู่จริง
     const { data: userData, error: findError } = await supabaseAdmin
       .from('users')
-      .select('name, email')
+      .select('name, email, plain_password')
       .eq('id', userId)
       .single();
 
@@ -42,38 +55,55 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'ไม่พบผู้ใช้ที่ระบุในฐานข้อมูล' });
     }
 
-    const oldEmail = userData.email;
-    const userName = userData.name;
+    const updates = {};
+    const dbUpdates = {};
 
-    // 2. อัปเดตอีเมลในระบบล็อกอิน (auth.users)
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-      email: newEmail.trim().toLowerCase(),
-      email_confirm: true
-    });
-
-    if (authError) {
-      console.error('[update-user-email] Auth update error:', authError.message);
-      return res.status(400).json({ error: `ไม่สามารถอัปเดตอีเมลระบบล็อกอินได้: ${authError.message}` });
+    // 2. ตรวจสอบการเปลี่ยนอีเมล
+    if (newEmail && newEmail.trim().toLowerCase() !== userData.email.toLowerCase()) {
+      updates.email = newEmail.trim().toLowerCase();
+      updates.email_confirm = true;
+      dbUpdates.email = newEmail.trim().toLowerCase();
     }
 
-    // 3. อัปเดตอีเมลในตาราง public.users
-    const { error: userError } = await supabaseAdmin
-      .from('users')
-      .update({ email: newEmail.trim().toLowerCase() })
-      .eq('id', userId);
-
-    if (userError) {
-      console.error('[update-user-email] Users table update error:', userError.message);
-      // พยายาม rollback
-      await supabaseAdmin.auth.admin.updateUserById(userId, { email: oldEmail });
-      return res.status(400).json({ error: `ไม่สามารถอัปเดตอีเมลในฐานข้อมูลหลักได้: ${userError.message}` });
+    // 3. ตรวจสอบการเปลี่ยนรหัสผ่าน
+    if (newPassword && newPassword !== userData.plain_password) {
+      updates.password = newPassword;
+      dbUpdates.plain_password = newPassword;
     }
 
-    console.log(`[update-user-email] Successfully updated email for ${userName} (${userId}) from ${oldEmail} to ${newEmail}`);
+    if (Object.keys(updates).length > 0) {
+      // อัปเดตในระบบ Auth
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, updates);
+      if (authError) {
+        console.error('[update-user-email] Auth update error:', authError.message);
+        return res.status(400).json({ error: `ไม่สามารถอัปเดตข้อมูลในระบบ Auth ได้: ${authError.message}` });
+      }
+    }
+
+    if (Object.keys(dbUpdates).length > 0) {
+      // อัปเดตในตาราง public.users
+      const { error: userError } = await supabaseAdmin
+        .from('users')
+        .update(dbUpdates)
+        .eq('id', userId);
+
+      if (userError) {
+        console.error('[update-user-email] Users table update error:', userError.message);
+        // rollback Auth
+        const rollback = {};
+        if (dbUpdates.email) rollback.email = userData.email;
+        if (dbUpdates.plain_password) rollback.password = userData.plain_password;
+        await supabaseAdmin.auth.admin.updateUserById(userId, rollback);
+
+        return res.status(400).json({ error: `ไม่สามารถอัปเดตข้อมูลในฐานข้อมูลหลักได้: ${userError.message}` });
+      }
+    }
+
+    console.log(`[update-user-email] Successfully updated credentials for ${userData.name} (${userId})`);
 
     return res.status(200).json({
       success: true,
-      message: `เปลี่ยนอีเมลของ ${userName} เป็น ${newEmail} เรียบร้อยแล้ว`
+      message: 'อัปเดตข้อมูลผู้ใช้เรียบร้อยแล้ว'
     });
   } catch (err) {
     console.error('[update-user-email] Internal error:', err);
