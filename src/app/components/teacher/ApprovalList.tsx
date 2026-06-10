@@ -70,6 +70,7 @@ function ApprovalModal({ submission, initialSignature, onApprove, onReject, onCl
         initialSignature={initialSignature}
         attachments={submission.attachments || []}
         existingSteps={submission.approvalSteps}
+        currentLevel={submission.currentApprovalLevel}
         onConfirm={(sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize) => {
           onApprove(comment || 'อนุมัติ', sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize);
           onClose();

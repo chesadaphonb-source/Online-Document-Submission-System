@@ -41,6 +41,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const user = JSON.parse(storedProfile);
         setCurrentUser(user);
+
+        // ดึงข้อมูลล่าสุดจากเซิร์ฟเวอร์ในพื้นหลังเพื่อซิงค์ข้อมูล (เช่น สังกัด)
+        if (mode === 'supabase' && supabase && storedUserId) {
+          supabase
+            .from('users')
+            .select('*')
+            .eq('id', storedUserId)
+            .single()
+            .then(async ({ data: profile }) => {
+              if (profile) {
+                const updatedUser: any = {
+                  id: profile.id,
+                  name: profile.name || user.name,
+                  email: profile.email,
+                  role: profile.role || 'teacher',
+                  department: profile.department || '',
+                  faculty: profile.faculty || '',
+                  campus: profile.campus || 'bangkhen',
+                };
+                if (updatedUser.role === 'teacher') {
+                  const { data: teacherProfile } = await supabase
+                    .from('teachers')
+                    .select('*')
+                    .eq('user_id', profile.id)
+                    .single();
+                  if (teacherProfile) {
+                    updatedUser.position = teacherProfile.position;
+                    updatedUser.isAdvisor = teacherProfile.is_advisor;
+                    updatedUser.isDepartmentHead = teacherProfile.is_department_head;
+                    updatedUser.isDean = teacherProfile.is_dean;
+                    updatedUser.signatureData = teacherProfile.signature_data;
+                  }
+                }
+                setCurrentUser(updatedUser);
+                localStorage.setItem('ku_paper_user_profile', JSON.stringify(updatedUser));
+              }
+            });
+        }
       } catch { localStorage.removeItem('ku_paper_user_profile'); }
     } else if (storedUserId && mode !== 'supabase') {
       const user = mockUsers.find(u => u.id === storedUserId);

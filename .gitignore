@@ -26,3 +26,4 @@ early_content_*.tsx
 *.ps1
 *.sql
 *.xlsx
+scratch/

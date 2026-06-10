@@ -449,6 +449,12 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
         title: 'คำร้องผ่านครบทุกขั้นตอน รอปิดงาน',
         message: `${sub.formName} ของ ${sub.studentName} ผ่านอนุมัติครบแล้ว`,
         actionUrl: '/admin/inbox',
+        studentName: sub.studentName,
+        studentEmail: sub.studentEmail,
+        department: sub.department,
+        studentId: sub.studentId?.replace('student_', '') || sub.studentEmail?.replace('@ku.th', '') || '',
+        studentLevel: sub.studentLevel,
+        studentYear: sub.studentYear,
       });
     }
     addNotifications(notifs);
@@ -485,6 +491,12 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
       title: `${roleLabel}ไม่อนุมัติ`,
       message: `${approverName} ไม่อนุมัติ${sub.formName} ของ ${sub.studentName} — "${comment}"`,
       actionUrl: '/admin/inbox',
+      studentName: sub.studentName,
+      studentEmail: sub.studentEmail,
+      department: sub.department,
+      studentId: sub.studentId?.replace('student_', '') || sub.studentEmail?.replace('@ku.th', '') || '',
+      studentLevel: sub.studentLevel,
+      studentYear: sub.studentYear,
     });
   }, [submissions, addNotification]);
 
@@ -636,10 +648,19 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
       currentApprovalLevel: 1, revisionCount: (sub.revisionCount || 0) + 1,
     });
     addNotification({
-      recipientId: 'role:admin', submissionId, submissionName: sub.formName,
-      type: 'new_submission', title: 'นิสิตยื่นคำร้องใหม่อีกครั้ง',
+      recipientId: 'role:admin',
+      submissionId,
+      submissionName: sub.formName,
+      type: 'new_submission',
+      title: 'นิสิตยื่นคำร้องใหม่อีกครั้ง',
       message: `${sub.studentName} แก้ไขและยื่น${sub.formName} ใหม่อีกครั้ง`,
       actionUrl: '/admin/inbox',
+      studentName: sub.studentName,
+      studentEmail: sub.studentEmail,
+      department: sub.department,
+      studentId: sub.studentId?.replace('student_', '') || sub.studentEmail?.replace('@ku.th', '') || '',
+      studentLevel: sub.studentLevel,
+      studentYear: sub.studentYear,
     });
   }, [submissions, updateSubmission, addNotification]);
 

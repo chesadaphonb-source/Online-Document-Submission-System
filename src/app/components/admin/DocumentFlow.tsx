@@ -318,10 +318,20 @@ function SubmissionRow({ sub }: { sub: Submission }) {
 // ── Main Component ─────────────────────────────────────────────
 export function DocumentFlow() {
   const { submissions } = useSubmissions();
+  const { currentUser } = useAuth();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<SubmissionStatus | 'all'>('all');
 
-  const filtered = submissions.filter(s => {
+  const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email) : false;
+  const adminDept = currentUser?.department || '';
+
+  const mySubmissions = submissions.filter(s => {
+    if (isSuperAdmin) return true;
+    if (!adminDept) return true; // Fallback: admin with no department assigned sees all
+    return s.department?.trim().toLowerCase() === adminDept.trim().toLowerCase();
+  });
+
+  const filtered = mySubmissions.filter(s => {
     const matchSearch = search === '' ||
       s.studentName.includes(search) ||
       s.formName.includes(search) ||
@@ -332,12 +342,12 @@ export function DocumentFlow() {
   });
 
   const counts = {
-    total: submissions.length,
-    inReview: submissions.filter(s => ['submitted', 'admin_reviewing', 'in-review'].includes(s.status)).length,
-    teacherRejected: submissions.filter(s => s.status === 'teacher_rejected').length,
-    pendingClose: submissions.filter(s => s.status === 'pending_close').length,
-    approved: submissions.filter(s => s.status === 'approved').length,
-    rejected: submissions.filter(s => s.status === 'rejected').length,
+    total: mySubmissions.length,
+    inReview: mySubmissions.filter(s => ['submitted', 'admin_reviewing', 'in-review'].includes(s.status)).length,
+    teacherRejected: mySubmissions.filter(s => s.status === 'teacher_rejected').length,
+    pendingClose: mySubmissions.filter(s => s.status === 'pending_close').length,
+    approved: mySubmissions.filter(s => s.status === 'approved').length,
+    rejected: mySubmissions.filter(s => s.status === 'rejected').length,
   };
 
   return (

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateSignedAttachmentPDF, previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
+import { SUPER_ADMIN_EMAILS } from '../../context/SystemContext';
 
 interface DBTeacher { id: string; name: string; department?: string; position?: string; is_advisor?: boolean; is_department_head?: boolean; is_dean?: boolean; }
 
@@ -537,6 +538,7 @@ function PriorityBadge({ deadline }: { deadline?: string }) {
 // ── Main Component ────────────────────────────────────────────
 export function AdminInbox() {
   const { submissions } = useSubmissions();
+  const { currentUser } = useAuth();
   const [tab, setTab] = useState<'new' | 'teacher_rejected' | 'pending_close'>('new');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -564,9 +566,18 @@ export function AdminInbox() {
       });
   }, []);
 
-  const newSubs = submissions.filter(s => s.status === 'submitted' || s.status === 'admin_reviewing');
-  const rejectedSubs = submissions.filter(s => s.status === 'teacher_rejected');
-  const closeSubs = submissions.filter(s => s.status === 'pending_close');
+  const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email) : false;
+  const adminDept = currentUser?.department || '';
+
+  const mySubmissions = submissions.filter(s => {
+    if (isSuperAdmin) return true;
+    if (!adminDept) return true; // Fallback: admin with no department assigned sees all
+    return s.department?.trim().toLowerCase() === adminDept.trim().toLowerCase();
+  });
+
+  const newSubs = mySubmissions.filter(s => s.status === 'submitted' || s.status === 'admin_reviewing');
+  const rejectedSubs = mySubmissions.filter(s => s.status === 'teacher_rejected');
+  const closeSubs = mySubmissions.filter(s => s.status === 'pending_close');
 
   const tabs = [
     { key: 'new' as const, label: 'รอรับเรื่อง', count: newSubs.length, color: 'text-blue-600', dot: 'bg-blue-500' },

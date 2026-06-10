@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { SUPER_ADMIN_EMAILS } from './SystemContext';
 
 // ============================================================
 // TYPES
@@ -138,12 +139,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [currentUser]);
 
   // Helper: ค้นหา email ของผู้รับจาก Supabase
-  const lookupEmails = async (recipientId: string): Promise<string[]> => {
+  const lookupEmails = async (recipientId: string, department?: string): Promise<string[]> => {
     if (!isSupabaseConfigured || !supabase) return [];
     try {
       if (recipientId === 'role:admin') {
-        const { data } = await supabase.from('users').select('email').eq('role', 'admin');
-        return (data || []).map((r: any) => r.email).filter(Boolean);
+        const { data } = await supabase.from('users').select('email, department').eq('role', 'admin');
+        if (!data) return [];
+        return data
+          .filter((u: any) => {
+            const isSuper = u.email ? SUPER_ADMIN_EMAILS.includes(u.email) : false;
+            if (isSuper) return true;
+            if (!department) return true;
+            return u.department?.trim().toLowerCase() === department.trim().toLowerCase();
+          })
+          .map((r: any) => r.email)
+          .filter(Boolean);
       } else if (recipientId === 'role:teacher') {
         const { data } = await supabase.from('users').select('email').eq('role', 'teacher');
         return (data || []).map((r: any) => r.email).filter(Boolean);
@@ -192,7 +202,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     // ส่ง Email แจ้งเตือน
     try {
       // lookupEmails จาก Supabase ก่อน, ถ้าไม่เจอ ใช้ studentEmail ใน notification โดยตรง (fallback สำหรับนิสิต guest)
-      let emails = await lookupEmails(n.recipientId);
+      let emails = await lookupEmails(n.recipientId, n.department);
       if (emails.length === 0 && n.studentEmail) {
         emails = [n.studentEmail];
       }
@@ -266,7 +276,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // ส่ง Email แจ้งเตือนทุกคนในรายการ
       try {
         await Promise.all(ns.map(async (n) => {
-          let emails = await lookupEmails(n.recipientId);
+          let emails = await lookupEmails(n.recipientId, n.department);
           if (emails.length === 0 && n.studentEmail) {
             emails = [n.studentEmail];
           }

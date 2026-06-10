@@ -124,6 +124,7 @@ interface SignatureAndPlaceModalProps {
   extraPdfLabel?: string;
   existingSteps?: ApprovalStep[];     // ขั้นตอนที่อนุมัติไปแล้วเพื่อซ้อนลายเซ็น
   initialSignature?: string;
+  currentLevel?: number;              // ระดับขั้นตอนการอนุมัติปัจจุบัน
   onConfirm: (
     signatureData: string,
     posX: number,
@@ -152,6 +153,7 @@ export function SignatureAndPlaceModal({
   extraPdfUrl,
   extraPdfLabel = 'แบบฟอร์มคำร้อง (KU-Paper)',
   existingSteps = [],
+  currentLevel,
   onConfirm,
   onCancel,
 }: SignatureAndPlaceModalProps) {
@@ -162,15 +164,55 @@ export function SignatureAndPlaceModal({
   const [useExisting, setUseExisting] = useState(!!initialSignature);
   const [signatureData, setSignatureData] = useState<string | null>(initialSignature || null);
 
+  // ── Default position logic based on approval level ────────────
+  const pendingStep = existingSteps?.find(s => s.status === 'pending');
+  const level = currentLevel ?? pendingStep?.level ?? 1;
+
+  const getDefaultPositions = (lvl: number) => {
+    switch (lvl) {
+      case 2:
+        return {
+          sig: { x: 62, y: 67.5 },
+          text: { x: 60, y: 74.5 },
+          date: { x: 70, y: 78 },
+          checkmark: { x: 56.5, y: 64.5 }
+        };
+      case 3:
+        return {
+          sig: { x: 28, y: 88 },
+          text: { x: 26, y: 92.5 },
+          date: { x: 38, y: 95.5 },
+          checkmark: { x: 18.5, y: 85.5 }
+        };
+      case 4:
+        return {
+          sig: { x: 62, y: 88 },
+          text: { x: 60, y: 92.5 },
+          date: { x: 70, y: 95.5 },
+          checkmark: { x: 56.5, y: 85.5 }
+        };
+      case 1:
+      default:
+        return {
+          sig: { x: 28, y: 67.5 },
+          text: { x: 26, y: 74.5 },
+          date: { x: 38, y: 78 },
+          checkmark: { x: 18.5, y: 64.5 }
+        };
+    }
+  };
+
+  const defaults = getDefaultPositions(level);
+
   // ── Placement ────────────────────────────────────────────────
   // sigPositions[0] = ตำแหน่งหลัก, sigPositions[1..] = ตำแหน่งเพิ่มเติม (เช่น ลงนาม 2 จุด)
-  const [sigPositions, setSigPositions] = useState<{ x: number; y: number }[]>([{ x: 30, y: 65 }]);
+  const [sigPositions, setSigPositions] = useState<{ x: number; y: number }[]>(() => [defaults.sig]);
   const [sigSize, setSigSize] = useState(12);
 
   // Text block states — multiple draggable text annotations
   type TextItem = { val: string; pos: { x: number; y: number }; size: number };
-  const [textItems, setTextItems] = useState<TextItem[]>([
-    { val: '', pos: { x: 30, y: 72 }, size: 14 },
+  const [textItems, setTextItems] = useState<TextItem[]>(() => [
+    { val: '', pos: defaults.text, size: 14 },
   ]);
 
   // Date block helper & states
@@ -185,13 +227,13 @@ export function SignatureAndPlaceModal({
   const [useDate, setUseDate] = useState(true);
   const [dateSep, setDateSep] = useState<'/' | '-' | ' ' | 'custom'>('/');
   const [dateVal, setDateVal] = useState(getThaiDateString('/'));
-  const [datePos, setDatePos] = useState({ x: 45, y: 78 });
+  const [datePos, setDatePos] = useState(() => defaults.date);
   const [dateSize, setDateSize] = useState(11);
 
   // Checkmark states
   const [useCheckmark, setUseCheckmark] = useState(false);
   const [checkmarkVal, setCheckmarkVal] = useState('✓');
-  const [checkmarkPos, setCheckmarkPos] = useState({ x: 25, y: 72 });
+  const [checkmarkPos, setCheckmarkPos] = useState(() => defaults.checkmark);
 
   // Dragging — type carries index for text items
   const draggingItem = useRef<{ type: 'signature' | 'text' | 'date' | 'checkmark'; index: number } | null>(null);
@@ -522,7 +564,7 @@ export function SignatureAndPlaceModal({
                     <div className="flex items-center justify-between">
                       <label className="block text-[10px] font-semibold text-gray-600">✍️ ข้อความบนเอกสาร:</label>
                       <button
-                        onClick={() => setTextItems(prev => [...prev, { val: '', pos: { x: 30, y: 72 + prev.length * 6 }, size: 14 }])}
+                        onClick={() => setTextItems(prev => [...prev, { val: '', pos: { x: defaults.text.x, y: defaults.text.y + prev.length * 6 }, size: 14 }])}
                         className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-green-50 border border-green-300 text-green-700 rounded hover:bg-green-100 transition-colors"
                       >
                         + เพิ่มข้อความ

@@ -581,16 +581,47 @@ export function UserManager() {
           </p>
           <div className="space-y-2">
             {admins.map(a => (
-              <div key={a.id} className="flex items-center gap-3 text-xs justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-purple-800 font-medium">{a.name}</span>
-                  <span className="text-purple-500">{a.email}</span>
+              <div key={a.id} className="flex items-center gap-3 text-xs justify-between flex-wrap p-2.5 bg-white rounded-lg border border-purple-100">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-purple-800 font-semibold">{a.name}</span>
+                  <span className="text-purple-500 font-mono">{a.email}</span>
+                  <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-medium">
+                    สังกัด: {a.department || 'ทุกภาควิชา / ส่วนกลาง'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && (
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[10px] text-gray-500 font-medium">ระบุสังกัด:</label>
+                      <select
+                        value={a.department || ''}
+                        onChange={async (e) => {
+                          const newDept = e.target.value;
+                          try {
+                            if (isSupabaseConfigured && supabase) {
+                              const { error } = await supabase.from('users').update({ department: newDept }).eq('id', a.id);
+                              if (error) throw error;
+                            }
+                            handleUpdate(a.id, { department: newDept });
+                            toast.success(`อัปเดตสังกัดของ ${a.name} เป็น "${newDept || 'ทุกภาควิชา'}" สำเร็จ`);
+                          } catch (err: any) {
+                            toast.error(err.message || 'ไม่สามารถอัปเดตสังกัดได้');
+                          }
+                        }}
+                        className="px-2 py-1 border border-purple-200 rounded text-xs bg-white text-gray-750 cursor-pointer focus:outline-none focus:border-purple-400 font-medium"
+                      >
+                        <option value="">ทุกภาควิชา / ส่วนกลาง</option>
+                        <option value="ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม">ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม</option>
+                        <option value="ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม">ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม</option>
+                        <option value="ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน">ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน</option>
+                        <option value="สำนักงานคณะ">สำนักงานคณะ (Admin)</option>
+                      </select>
+                    </div>
+                  )}
+                  {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && (
                     <button
                       onClick={() => handleEditEmail(a.id, a.email, a.name)}
-                      className="text-[10px] font-bold text-purple-650 hover:text-purple-800 bg-white border border-purple-200 rounded px-2 py-0.5 shadow-sm transition-all cursor-pointer flex items-center gap-1"
+                      className="text-[10px] font-bold text-purple-650 hover:text-purple-800 bg-white border border-purple-200 rounded px-2 py-1 shadow-sm transition-all cursor-pointer flex items-center gap-1"
                     >
                       <Edit2 size={9} /> แก้ไขอีเมล
                     </button>
@@ -598,7 +629,7 @@ export function UserManager() {
                   {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && !SUPER_ADMIN_EMAILS.includes(a.email) && (
                     <button
                       onClick={() => demoteToTeacher(a.id, a.name)}
-                      className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-white border border-red-200 rounded px-2 py-0.5 shadow-sm transition-all cursor-pointer"
+                      className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-white border border-red-200 rounded px-2 py-1 shadow-sm transition-all cursor-pointer"
                     >
                       ถอดสิทธิ์ Admin
                     </button>

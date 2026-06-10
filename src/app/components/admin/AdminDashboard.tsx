@@ -26,10 +26,23 @@ export function AdminDashboard() {
   useEffect(() => {
     async function loadStats() {
       if (!isSupabaseConfigured || !supabase) return;
+
+      const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email) : false;
+      const adminDept = currentUser?.department || '';
+
+      let studentQuery = supabase.from('submissions').select('student_id', { count: 'exact', head: true });
+      let teacherQuery = supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'teacher');
+      const formQuery = supabase.from('forms_library').select('id', { count: 'exact', head: true }).eq('is_active', true);
+
+      if (!isSuperAdmin && adminDept) {
+        studentQuery = studentQuery.eq('department', adminDept);
+        teacherQuery = teacherQuery.eq('department', adminDept);
+      }
+
       const [{ count: studentCount }, { count: teacherCount }, { count: formCount }] = await Promise.all([
-        supabase.from('submissions').select('student_id', { count: 'exact', head: true }),
-        supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'teacher'),
-        supabase.from('forms_library').select('id', { count: 'exact', head: true }).eq('is_active', true),
+        studentQuery,
+        teacherQuery,
+        formQuery,
       ]);
       setDbStats({
         totalStudents: studentCount ?? 0,
@@ -38,23 +51,32 @@ export function AdminDashboard() {
       });
     }
     loadStats();
-  }, []);
+  }, [currentUser]);
+
+  const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email) : false;
+  const adminDept = currentUser?.department || '';
+
+  const mySubmissions = submissions.filter(s => {
+    if (isSuperAdmin) return true;
+    if (!adminDept) return true; // Fallback: admin with no department assigned sees all
+    return s.department?.trim().toLowerCase() === adminDept.trim().toLowerCase();
+  });
 
   const stats = {
     totalStudents: dbStats.totalStudents,
     totalTeachers: dbStats.totalTeachers,
     totalForms: dbStats.totalForms,
-    totalSubmissions: submissions.length,
-    pending: submissions.filter(s => s.status === 'in-review' || s.status === 'submitted').length,
-    approved: submissions.filter(s => s.status === 'approved').length,
-    rejected: submissions.filter(s => s.status === 'rejected').length,
+    totalSubmissions: mySubmissions.length,
+    pending: mySubmissions.filter(s => s.status === 'in-review' || s.status === 'submitted').length,
+    approved: mySubmissions.filter(s => s.status === 'approved').length,
+    rejected: mySubmissions.filter(s => s.status === 'rejected').length,
   };
 
   // Form type distribution
   const formDist = formTemplates.map(f => ({
     name: f.name.length > 18 ? f.name.substring(0, 15) + '...' : f.name,
     fullName: f.name,
-    count: submissions.filter(s => s.formType === f.id).length,
+    count: mySubmissions.filter(s => s.formType === f.id).length,
   })).filter(f => f.count > 0);
 
   // Status distribution for pie
@@ -64,11 +86,11 @@ export function AdminDashboard() {
     { name: 'ไม่อนุมัติ', value: stats.rejected },
   ].filter(d => d.value > 0);
 
-  const recentAll = submissions.slice(0, 6);
+  const recentAll = mySubmissions.slice(0, 6);
 
   const handleExportCSV = () => {
     try {
-      const exportData = submissions.map(s => ({
+      const exportData = mySubmissions.map(s => ({
         'รหัสคำร้อง': s.id,
         'ประเภท': s.formName,
         'ชื่อนิสิต': s.studentName,

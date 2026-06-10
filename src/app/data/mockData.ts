@@ -56,6 +56,7 @@ export interface Admin {
   email: string;
   role: 'admin';
   campus?: string;
+  department?: string;
 }
 
 export type User = Student | Teacher | Admin;

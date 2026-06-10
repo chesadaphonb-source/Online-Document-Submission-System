@@ -2,6 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { useSubmissions } from '../../context/SubmissionsContext';
+import { SUPER_ADMIN_EMAILS } from '../../context/SystemContext';
 import { useEffect, useState, ElementType, useRef } from 'react';
 import {
   LayoutDashboard, FileText, ClipboardList, CheckSquare, Users,
@@ -83,7 +84,7 @@ function NotificationDropdown({ userId, userRole, onClose }: { userId: string; u
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <p className="text-sm font-semibold text-gray-800">การแจ้งเตือน</p>
         <button
-          onClick={() => markAllAsRead(userId)}
+          onClick={() => markAllAsRead(userId, userRole)}
           className="text-xs text-green-600 hover:text-green-800 transition-colors"
         >
           อ่านทั้งหมด
@@ -122,11 +123,22 @@ function NotificationDropdown({ userId, userRole, onClose }: { userId: string; u
 
 // ── Admin Notification Dropdown (ดึงจาก submissions จริง — ไม่หายหลัง refresh) ──
 function AdminNotificationDropdown({ onClose }: { onClose: () => void }) {
+  const { currentUser } = useAuth();
   const { submissions } = useSubmissions();
   const navigate = useNavigate();
-  const pendingSubs = submissions.filter(s => s.status === 'submitted' || s.status === 'admin_reviewing');
-  const rejectedSubs = submissions.filter(s => s.status === 'teacher_rejected');
-  const closeSubs = submissions.filter(s => s.status === 'pending_close');
+
+  const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email) : false;
+  const adminDept = currentUser?.department || '';
+
+  const mySubmissions = submissions.filter(s => {
+    if (isSuperAdmin) return true;
+    if (!adminDept) return true;
+    return s.department?.trim().toLowerCase() === adminDept.trim().toLowerCase();
+  });
+
+  const pendingSubs = mySubmissions.filter(s => s.status === 'submitted' || s.status === 'admin_reviewing');
+  const rejectedSubs = mySubmissions.filter(s => s.status === 'teacher_rejected');
+  const closeSubs = mySubmissions.filter(s => s.status === 'pending_close');
   const allItems = [
     ...pendingSubs.map(s => ({ sub: s, label: 'รอรับเรื่อง', dot: 'bg-blue-500', badge: 'bg-blue-50 text-blue-600' })),
     ...rejectedSubs.map(s => ({ sub: s, label: 'อาจารย์ปฏิเสธ', dot: 'bg-orange-500', badge: 'bg-orange-50 text-orange-600' })),
@@ -191,9 +203,19 @@ export function AppLayout({ role }: { role: 'student' | 'teacher' | 'admin' }) {
   const handleLogout = () => { logout(); navigate('/login', { replace: true }); };
   const navItems = getNavItems(role);
   const { submissions } = useSubmissions();
+
+  const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email) : false;
+  const adminDept = currentUser?.department || '';
+
+  const mySubmissions = submissions.filter(s => {
+    if (isSuperAdmin) return true;
+    if (!adminDept) return true;
+    return s.department?.trim().toLowerCase() === adminDept.trim().toLowerCase();
+  });
+
   const myUnread = currentUser
     ? (role === 'admin'
-        ? submissions.filter(s => s.status === 'submitted' || s.status === 'teacher_rejected' || s.status === 'pending_close').length
+        ? mySubmissions.filter(s => s.status === 'submitted' || s.status === 'teacher_rejected' || s.status === 'pending_close').length
         : unreadCount(currentUser.id, currentUser.role))
     : 0;
 
