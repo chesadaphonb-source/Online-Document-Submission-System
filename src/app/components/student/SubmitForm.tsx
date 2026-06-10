@@ -194,6 +194,8 @@ interface DraftData {
   savedAt: string;
 }
 
+const normStr = (s: string) => (s || '').toLowerCase().replace(/[-_\s.]/g, '');
+
 export function SubmitForm() {
   const { currentUser } = useAuth();
   const { addSubmission } = useSubmissions();
@@ -429,9 +431,7 @@ export function SubmitForm() {
     }
   };
 
-  // ── ฟังก์ชัน normalize string สำหรับ matching ──────────────────
-  // ลบ hyphen, space, underscore, dot แล้ว lowercase เพื่อเปรียบเทียบแบบ fuzzy
-  const normStr = (s: string) => (s || '').toLowerCase().replace(/[-_\s.]/g, '');
+  // ── ค้นหาแบบฟอร์มในระบบ ──────────────────
 
   // หา record จาก forms_library ที่ตรงกับฟอร์มที่นิสิตเลือก
   // strategy 1: file_name ตรงกับ id+'.pdf' (case+hyphen insensitive)
