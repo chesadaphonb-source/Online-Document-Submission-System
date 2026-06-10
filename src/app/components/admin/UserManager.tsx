@@ -311,6 +311,8 @@ export function UserManager() {
   const [search, setSearch] = useState('');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
   const { currentUser } = useAuth();
+  const [pendingDepts, setPendingDepts] = useState<Record<string, string>>({});
+  const [updatingDepts, setUpdatingDepts] = useState<Record<string, boolean>>({});
 
   const demoteToTeacher = async (userId: string, userName: string) => {
     if (!confirm(`ต้องการถอดถอนสิทธิ์ Admin ของ "${userName}" กลับไปเป็นอาจารย์ปกติใช่หรือไม่?`)) return;
@@ -594,21 +596,13 @@ export function UserManager() {
                     <div className="flex items-center gap-1.5">
                       <label className="text-[10px] text-gray-500 font-medium">ระบุสังกัด:</label>
                       <select
-                        value={a.department || ''}
-                        onChange={async (e) => {
+                        value={pendingDepts[a.id] !== undefined ? pendingDepts[a.id] : (a.department || '')}
+                        disabled={updatingDepts[a.id]}
+                        onChange={(e) => {
                           const newDept = e.target.value;
-                          try {
-                            if (isSupabaseConfigured && supabase) {
-                              const { error } = await supabase.from('users').update({ department: newDept }).eq('id', a.id);
-                              if (error) throw error;
-                            }
-                            handleUpdate(a.id, { department: newDept });
-                            toast.success(`อัปเดตสังกัดของ ${a.name} เป็น "${newDept || 'ทุกภาควิชา'}" สำเร็จ`);
-                          } catch (err: any) {
-                            toast.error(err.message || 'ไม่สามารถอัปเดตสังกัดได้');
-                          }
+                          setPendingDepts(prev => ({ ...prev, [a.id]: newDept }));
                         }}
-                        className="px-2 py-1 border border-purple-200 rounded text-xs bg-white text-gray-750 cursor-pointer focus:outline-none focus:border-purple-400 font-medium"
+                        className="px-2 py-1 border border-purple-200 rounded text-xs bg-white text-gray-750 cursor-pointer focus:outline-none focus:border-purple-400 font-medium disabled:opacity-50"
                       >
                         <option value="">ทุกภาควิชา / ส่วนกลาง</option>
                         <option value="ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม">ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม</option>
@@ -616,6 +610,54 @@ export function UserManager() {
                         <option value="ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน">ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน</option>
                         <option value="สำนักงานคณะ">สำนักงานคณะ (Admin)</option>
                       </select>
+                      {pendingDepts[a.id] !== undefined && pendingDepts[a.id] !== (a.department || '') && (
+                        <>
+                          {updatingDepts[a.id] ? (
+                            <span className="text-[10px] text-purple-600 font-semibold animate-pulse shrink-0">กำลังเปลี่ยน...</span>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                const newDept = pendingDepts[a.id];
+                                setUpdatingDepts(prev => ({ ...prev, [a.id]: true }));
+                                try {
+                                  if (isSupabaseConfigured && supabase) {
+                                    const { error } = await supabase.from('users').update({ department: newDept }).eq('id', a.id);
+                                    if (error) throw error;
+                                  }
+                                  handleUpdate(a.id, { department: newDept });
+                                  setPendingDepts(prev => {
+                                    const next = { ...prev };
+                                    delete next[a.id];
+                                    return next;
+                                  });
+                                  toast.success(`อัปเดตสังกัดของ ${a.name} เป็น "${newDept || 'ทุกภาควิชา'}" สำเร็จ`);
+                                } catch (err: any) {
+                                  toast.error(err.message || 'ไม่สามารถอัปเดตสังกัดได้');
+                                } finally {
+                                  setUpdatingDepts(prev => ({ ...prev, [a.id]: false }));
+                                }
+                              }}
+                              className="px-2 py-1 bg-purple-600 text-white rounded text-[10px] font-bold hover:bg-purple-700 transition-all shrink-0 cursor-pointer"
+                            >
+                              ยืนยัน
+                            </button>
+                          )}
+                          {!updatingDepts[a.id] && (
+                            <button
+                              onClick={() => {
+                                setPendingDepts(prev => {
+                                  const next = { ...prev };
+                                  delete next[a.id];
+                                  return next;
+                                });
+                              }}
+                              className="px-1.5 py-1 bg-gray-100 text-gray-500 rounded text-[10px] font-medium hover:bg-gray-200 transition-all shrink-0 cursor-pointer"
+                            >
+                              ยกเลิก
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                   {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && (
