@@ -275,9 +275,9 @@ export function SubmitForm() {
   // โหลด required_docs และ workflow_steps จาก library
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.from('forms_library').select('id,name,file_name,required_docs,workflow_steps,campus,degree_level')
+    supabase.from('forms_library').select('id,name,description,category,file_name,required_docs,workflow_steps,campus,degree_level')
       .eq('is_active', true)
-      .then(({ data }) => { if (data) setLibraryForms(data); });
+      .then(({ data }) => { if (data) setLibraryForms(data as any); });
   }, [currentUser]);
 
   const student = mockStudents.find(s => s.id === currentUser?.id);
@@ -335,36 +335,95 @@ export function SubmitForm() {
     toast.info('ลบฉบับร่างแล้ว');
   };
 
-  const filteredForms = formTemplates.filter(f => {
-    const matchSearch = f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.nameEn.toLowerCase().includes(searchQuery.toLowerCase());
-    if (!matchSearch) return false;
-
-    const matchCategory = filterCategory === 'all' || f.category === filterCategory;
-    if (!matchCategory) return false;
-
-    // หาข้อมูลวิทยาเขตและระดับการศึกษาที่บันทึกไว้ในฐานข้อมูล (Supabase)
-    const dbRecord = libraryForms.find(lf => {
-      const fn = normStr(lf.file_name || '');
-      const fn2 = normStr(lf.name || '');
-      const sid = normStr(f.id);
-      const sname = normStr(f.name);
-      return fn === normStr(f.id + '.pdf')
-        || fn === normStr(f.name + '.pdf')
+  const mapDbFormToTemplate = (dbForm: LibraryForm): FormTemplate => {
+    // ค้นหา template ที่มีอยู่แล้วเพื่อคัดลอกฟิลด์
+    const template = formTemplates.find(t => {
+      const fn = normStr(dbForm.file_name || '');
+      const fn2 = normStr(dbForm.name || '');
+      const sid = normStr(t.id);
+      const sname = normStr(t.name);
+      return fn === normStr(t.id + '.pdf')
+        || fn === normStr(t.name + '.pdf')
         || fn.includes(sid)
         || fn.includes(sname)
         || fn2 === sname
-        || lf.name === f.name;
+        || dbForm.name === t.name;
     });
 
-    const campus = dbRecord ? dbRecord.campus : (f.campus || 'bangkhen');
-    const degreeLevel = dbRecord ? (dbRecord as any).degree_level : 'all';
+    // หากเจอ template ให้ใช้โครงสร้างฟิลด์ของ template นั้น
+    if (template) {
+      return {
+        ...template,
+        id: dbForm.id as any, // ใช้ ID จาก database เพื่อนำไปอ้างอิงตอนสร้าง submission
+        name: dbForm.name,
+        description: dbForm.description || template.description,
+        category: (dbForm.category as any) || template.category,
+        campus: dbForm.campus,
+        degree_level: dbForm.degree_level,
+      };
+    }
 
-    const matchCampus = campus === selectedCampus;
-    const matchDegree = selectedDegreeLevel === 'all' || degreeLevel === 'all' || degreeLevel === selectedDegreeLevel;
+    // หากไม่พบ ให้สร้างแบบฟอร์มทั่วไป (Generic Form)
+    return {
+      id: dbForm.id as any,
+      name: dbForm.name,
+      nameEn: dbForm.file_name || '',
+      description: dbForm.description || 'แบบฟอร์มคำร้องออนไลน์',
+      category: (dbForm.category as any) || 'general',
+      estimatedDays: 5,
+      approvalLevels: (dbForm.workflow_steps || ['advisor', 'department_head', 'dean']).map((stepType, idx) => {
+        let role = 'ระดับที่ ' + (idx + 1);
+        if (stepType === 'advisor') role = 'อาจารย์ที่ปรึกษา';
+        else if (stepType === 'department_head' || stepType === 'head') role = 'หัวหน้าภาควิชา';
+        else if (stepType === 'dean') role = 'คณบดีหรือผู้แทน';
+        return { level: idx + 1, role };
+      }),
+      fields: [
+        { id: 'request_topic', label: 'เรื่องที่ยื่นคำร้อง', type: 'text', required: true, placeholder: dbForm.name },
+        { id: 'request_detail', label: 'รายละเอียดความประสงค์', type: 'textarea', required: true, placeholder: 'ระบุรายละเอียดคำร้องและความจำเป็นของคุณ' },
+      ],
+      colorClass: 'text-green-600',
+      bgClass: 'bg-green-50',
+      iconBg: 'bg-green-100',
+      campus: dbForm.campus,
+      degree_level: dbForm.degree_level,
+    };
+  };
 
-    return matchCampus && matchDegree;
-  });
+  // กรองและแมปแบบฟอร์มจากฐานข้อมูล (forms_library) ที่ดึงมา
+  const mappedDbForms = libraryForms
+    .filter(lf => {
+      const campus = lf.campus || 'bangkhen';
+      const degreeLevel = lf.degree_level || 'all';
+
+      const matchCampus = campus === selectedCampus;
+      const matchDegree = selectedDegreeLevel === 'all' || degreeLevel === 'all' || degreeLevel === selectedDegreeLevel;
+      const matchSearch = lf.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (lf.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchCategory = filterCategory === 'all' || lf.category === filterCategory;
+
+      return matchCampus && matchDegree && matchSearch && matchCategory;
+    })
+    .map(mapDbFormToTemplate);
+
+  // ใช้แบบฟอร์ม Mock สแตติกหากไม่ได้ตั้งค่า Supabase
+  const fallbackFilteredForms = (!isSupabaseConfigured || libraryForms.length === 0)
+    ? formTemplates.filter(f => {
+        const matchSearch = f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          f.nameEn.toLowerCase().includes(searchQuery.toLowerCase());
+        if (!matchSearch) return false;
+
+        const matchCategory = filterCategory === 'all' || f.category === filterCategory;
+        if (!matchCategory) return false;
+
+        const matchCampus = (f.campus || 'bangkhen') === selectedCampus;
+        const matchDegree = selectedDegreeLevel === 'all' || (f.degree_level || 'all') === 'all' || f.degree_level === selectedDegreeLevel;
+
+        return matchCampus && matchDegree;
+      })
+    : [];
+
+  const filteredForms = mappedDbForms.length > 0 ? mappedDbForms : fallbackFilteredForms;
 
   const validateStep1 = () => selectedForm !== null;
 
@@ -439,7 +498,8 @@ export function SubmitForm() {
   // strategy 3: file_name มี name เป็น substring
   // strategy 4: name ตรงกัน (exact หรือ normalized)
   const currentFormRecord = selectedForm
-    ? libraryForms.find(f => {
+    ? libraryForms.find(f => f.id === selectedForm.id) ||
+      libraryForms.find(f => {
         const fn = normStr(f.file_name || '');
         const fn2 = normStr(f.name || '');
         const sid = normStr(selectedForm.id);
