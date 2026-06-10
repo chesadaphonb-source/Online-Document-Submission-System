@@ -57,10 +57,15 @@ function TeacherCard({ user, onUpdate }: {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(user.name);
+  const [editEmail, setEditEmail] = useState(user.email);
   const [editDept, setEditDept] = useState(user.department || '');
   const [editPos, setEditPos] = useState(user.position || '');
   const [editPassword, setEditPassword] = useState(user.plain_password || '');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setEditEmail(user.email);
+  }, [user.email]);
 
   const promoteToAdmin = async () => {
     if (!confirm(`ต้องการแต่งตั้ง "${user.name}" เป็นเจ้าหน้าที่ระบบ (Admin) ใช่หรือไม่?`)) return;
@@ -79,6 +84,29 @@ function TeacherCard({ user, onUpdate }: {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const isSuperAdmin = !!currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email);
+      const emailChanged = editEmail.trim().toLowerCase() !== user.email.toLowerCase();
+
+      if (emailChanged && isSuperAdmin) {
+        if (!editEmail.trim()) {
+          throw new Error('กรุณากรอกอีเมล');
+        }
+        const response = await fetch('/api/update-user-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            newEmail: editEmail.trim().toLowerCase(),
+            adminEmail: currentUser.email
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'เกิดข้อผิดพลาดในการแก้ไขอีเมล');
+        }
+      }
+
       if (isSupabaseConfigured && supabase) {
         // Update name, department, and plain_password in the users table
         const { error: userError } = await supabase.from('users').update({
@@ -94,7 +122,13 @@ function TeacherCard({ user, onUpdate }: {
           if (teacherError) throw teacherError;
         }
       }
-      onUpdate(user.id, { name: editName, department: editDept, position: editPos, plain_password: editPassword });
+      onUpdate(user.id, {
+        name: editName,
+        email: isSuperAdmin ? editEmail.trim().toLowerCase() : user.email,
+        department: editDept,
+        position: editPos,
+        plain_password: editPassword
+      });
       toast.success('บันทึกข้อมูลแล้ว');
       setEditing(false);
     } catch (e: any) {
@@ -181,7 +215,7 @@ function TeacherCard({ user, onUpdate }: {
 
             {/* Edit info */}
             {!editing ? (
-              <button onClick={() => { setEditName(user.name); setEditDept(user.department || ''); setEditPos(user.position || ''); setEditPassword(user.plain_password || ''); setEditing(true); }}
+              <button onClick={() => { setEditName(user.name); setEditDept(user.department || ''); setEditPos(user.position || ''); setEditPassword(user.plain_password || ''); setEditEmail(user.email); setEditing(true); }}
                 className="flex items-center gap-1.5 text-xs text-green-700 hover:bg-green-50 px-2 py-1 rounded-lg border border-green-200">
                 <Edit2 size={11} /> แก้ไขข้อมูล
               </button>
@@ -190,6 +224,14 @@ function TeacherCard({ user, onUpdate }: {
                 <input value={editName} onChange={e => setEditName(e.target.value)}
                   placeholder="ชื่อ-นามสกุล"
                   className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 text-gray-800" />
+                {!!currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && (
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-semibold text-purple-700">อีเมล (Super Admin Only)</label>
+                    <input value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                      placeholder="อีเมลผู้ใช้"
+                      className="w-full px-2 py-1.5 text-xs border border-purple-200 focus:border-purple-400 bg-purple-50/30 rounded-lg focus:outline-none text-gray-800 font-medium" />
+                  </div>
+                )}
                 <input value={editDept} onChange={e => setEditDept(e.target.value)}
                   placeholder="ภาควิชา"
                   className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 text-gray-800" />
@@ -268,6 +310,38 @@ export function UserManager() {
       toast.success(`ถอดถอนสิทธิ์ Admin ของ "${userName}" สำเร็จ`);
     } catch (e: any) {
       toast.error(e.message);
+    }
+  };
+
+  const handleEditEmail = async (userId: string, currentEmail: string, userName: string) => {
+    const newEmail = prompt(`ระบุอีเมลใหม่สำหรับ "${userName}":`, currentEmail);
+    if (newEmail === null) return;
+    if (!newEmail.trim()) {
+      toast.error('กรุณากรอกอีเมลที่ถูกต้อง');
+      return;
+    }
+    if (newEmail.trim().toLowerCase() === currentEmail.toLowerCase()) return;
+
+    try {
+      const response = await fetch('/api/update-user-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          newEmail: newEmail.trim().toLowerCase(),
+          adminEmail: currentUser?.email
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'เกิดข้อผิดพลาดในการแก้ไขอีเมล');
+      }
+
+      handleUpdate(userId, { email: newEmail.trim().toLowerCase() });
+      toast.success(`เปลี่ยนอีเมลเป็น ${newEmail} สำเร็จแล้ว`);
+    } catch (err: any) {
+      toast.error(err.message || 'ไม่สามารถเปลี่ยนอีเมลได้');
     }
   };
 
@@ -499,14 +573,24 @@ export function UserManager() {
                   <span className="text-purple-800 font-medium">{a.name}</span>
                   <span className="text-purple-500">{a.email}</span>
                 </div>
-                {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && !SUPER_ADMIN_EMAILS.includes(a.email) && (
-                  <button
-                    onClick={() => demoteToTeacher(a.id, a.name)}
-                    className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-white border border-red-200 rounded px-2 py-0.5 shadow-sm transition-all cursor-pointer"
-                  >
-                    ถอดสิทธิ์ Admin
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && (
+                    <button
+                      onClick={() => handleEditEmail(a.id, a.email, a.name)}
+                      className="text-[10px] font-bold text-purple-650 hover:text-purple-800 bg-white border border-purple-200 rounded px-2 py-0.5 shadow-sm transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <Edit2 size={9} /> แก้ไขอีเมล
+                    </button>
+                  )}
+                  {currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email) && !SUPER_ADMIN_EMAILS.includes(a.email) && (
+                    <button
+                      onClick={() => demoteToTeacher(a.id, a.name)}
+                      className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-white border border-red-200 rounded px-2 py-0.5 shadow-sm transition-all cursor-pointer"
+                    >
+                      ถอดสิทธิ์ Admin
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
