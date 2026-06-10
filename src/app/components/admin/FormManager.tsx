@@ -242,6 +242,7 @@ function EditFormModal({ form, onClose, onSuccess }: { form: FormItem; onClose: 
   const [workflowSteps, setWorkflowSteps] = useState<string[]>(form.workflow_steps || ['advisor', 'department_head', 'dean']);
   const [newDoc, setNewDoc] = useState('');
   const [saving, setSaving] = useState(false);
+  const [degreeLevel, setDegreeLevel] = useState(form.degree_level || 'all');
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error('กรุณาระบุชื่อแบบฟอร์ม'); return; }
@@ -255,6 +256,7 @@ function EditFormModal({ form, onClose, onSuccess }: { form: FormItem; onClose: 
             category,
             required_docs: requiredDocs,
             workflow_steps: workflowSteps,
+            degree_level: degreeLevel,
             updated_at: new Date().toISOString(),
           })
           .eq('id', form.id);
@@ -296,8 +298,17 @@ function EditFormModal({ form, onClose, onSuccess }: { form: FormItem; onClose: 
           <div>
             <label className="block text-sm text-gray-700 mb-1.5 font-medium">หมวดหมู่</label>
             <select value={category} onChange={e => setCategory(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400">
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 bg-white">
               {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1.5 font-medium">ระดับการศึกษา</label>
+            <select value={degreeLevel} onChange={e => setDegreeLevel(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 bg-white cursor-pointer">
+              {Object.entries(DEGREE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
             </select>
           </div>
           <div>
