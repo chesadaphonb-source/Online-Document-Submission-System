@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Move, Check, X, Loader2, Plus, Calendar, Type } from 'lucide-react';
 import type { Submission, ApprovalStep } from '../../data/mockData';
 import { toast } from 'sonner';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 
 // Helper to generate Thai Buddhist Era date string
 function getThaiDateString(sep = '/') {
@@ -136,6 +137,35 @@ export function AdminAdjustSignaturesModal({
   const [steps, setSteps] = useState<ApprovalStep[]>(() => JSON.parse(JSON.stringify(submission.approvalSteps)));
   const [applyToAllActive, setApplyToAllActive] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dbSignatures, setDbSignatures] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    const approverIds = steps
+      .map(s => s.approverId)
+      .filter((id): id is string => !!id);
+    if (approverIds.length === 0) return;
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('teachers')
+          .select('user_id, signature_data')
+          .in('user_id', approverIds);
+        if (data && !error) {
+          const mapping: Record<string, string> = {};
+          data.forEach(row => {
+            if (row.signature_data) {
+              mapping[row.user_id] = row.signature_data;
+            }
+          });
+          setDbSignatures(mapping);
+        }
+      } catch (err) {
+        console.error('Failed to load DB signatures:', err);
+      }
+    })();
+  }, [submission]);
   
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -497,8 +527,35 @@ export function AdminAdjustSignaturesModal({
                           </div>
                         </div>
                       ) : (
-                        <div className="text-[10px] text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-2 text-center italic">
-                          ไม่มีภาพลายเซ็น (เซ็นสดบนเอกสาร)
+                        <div className="space-y-1.5">
+                          <div className="text-[10px] text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-2 text-center italic">
+                            ไม่มีภาพลายเซ็น (เซ็นสดบนเอกสาร)
+                          </div>
+                          {step.approverId && dbSignatures[step.approverId] ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const sig = dbSignatures[step.approverId!];
+                                setSteps(prev => prev.map(s => s.level === step.level ? {
+                                  ...s,
+                                  signatureData: sig,
+                                  signatureX: s.signatureX ?? 30,
+                                  signatureY: s.signatureY ?? 65,
+                                  signatureSize: s.signatureSize ?? 12
+                                } : s));
+                                toast.success('นำเข้าลายเซ็นจากระบบเรียบร้อยแล้ว');
+                              }}
+                              className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                            >
+                              <Plus size={12} /> นำเข้าลายเซ็นจากระบบของอาจารย์
+                            </button>
+                          ) : (
+                            step.approverId && (
+                              <div className="text-[9px] text-gray-400 text-center">
+                                * ไม่พบลายเซ็นดิจิทัลของอาจารย์ท่านนี้ในระบบ
+                              </div>
+                            )
+                          )}
                         </div>
                       )}
 
