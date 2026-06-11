@@ -690,6 +690,32 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
         const newSteps = s.approvalSteps.map(step => {
           const matchingUpdatedStep = updatedSteps.find(us => us.level === step.level);
           if (!matchingUpdatedStep) return step;
+
+          // Helper to resolve text values (name/role) for the target step
+          const resolveText = (textVal: string | undefined) => {
+            if (!textVal) return textVal;
+            const sourceStep = updatedSteps.find(us => us.level === step.level);
+            const sourceName = sourceStep?.approverName || '';
+            const sourceRole = sourceStep?.roleName || '';
+            const targetName = step.approverName || '';
+            const targetRole = step.roleName || '';
+
+            if (sourceName && textVal === sourceName) {
+              return targetName;
+            }
+            if (sourceRole && textVal === sourceRole) {
+              return targetRole;
+            }
+            return textVal;
+          };
+
+          const resolvedExtraTextBlocks = matchingUpdatedStep.extraTextBlocks?.map(etb => {
+            return {
+              ...etb,
+              val: resolveText(etb.val) || ''
+            };
+          });
+
           return {
             ...step,
             signatureX: matchingUpdatedStep.signatureX,
@@ -704,9 +730,11 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
             dateX: matchingUpdatedStep.dateX,
             dateY: matchingUpdatedStep.dateY,
             dateSize: matchingUpdatedStep.dateSize,
-            textBlock: matchingUpdatedStep.textBlock,
+            textBlock: resolveText(matchingUpdatedStep.textBlock),
             textBlockX: matchingUpdatedStep.textBlockX,
             textBlockY: matchingUpdatedStep.textBlockY,
+            textBlockSize: matchingUpdatedStep.textBlockSize,
+            extraTextBlocks: resolvedExtraTextBlocks,
           };
         });
         dbUpdates.push({ id: s.id, steps: newSteps });
