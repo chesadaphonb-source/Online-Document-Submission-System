@@ -13,7 +13,7 @@ import {
 import {
   CheckCircle, XCircle, FileText, ChevronDown, ChevronUp,
   User, Calendar, Clock, CheckSquare, History, Paperclip, AlertCircle,
-  PenLine, ExternalLink, Download, X,
+  PenLine, ExternalLink, Download, X, Eye, MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -471,11 +471,295 @@ function HistoryRow({ sub, teacherId }: { sub: Submission; teacherId: string }) 
   );
 }
 
+// ── Tracking Timeline ─────────────────────────────────────────
+function TrackingTimeline({ submission }: { submission: Submission }) {
+  const isTerminated = submission.status === 'rejected';
+  const isComplete = submission.status === 'approved';
+  const isPendingClose = submission.status === 'pending_close';
+  const isAdminPhase = ['submitted', 'admin_reviewing'].includes(submission.status);
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">เส้นทางการดำเนินการ</p>
+      <div className="relative pl-1">
+        {/* Step 0: Admin รับเรื่อง */}
+        <div className="relative flex gap-3 pb-3">
+          <div className="absolute left-3 top-7 bottom-0 w-0.5 bg-gray-200" />
+          <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center z-10 ${
+            submission.receivedByAdminAt ? 'bg-blue-500' :
+            isAdminPhase ? 'bg-blue-400 animate-pulse' : 'bg-gray-200'
+          }`}>
+            {submission.receivedByAdminAt
+              ? <CheckCircle size={12} className="text-white" />
+              : isAdminPhase
+                ? <Clock size={12} className="text-white" />
+                : <span className="text-[10px] text-gray-400 font-medium">1</span>
+            }
+          </div>
+          <div className="flex-1 min-w-0 pb-1">
+            <div className="flex items-center justify-between flex-wrap gap-1">
+              <p className="text-xs font-medium text-gray-800">เจ้าหน้าที่รับเรื่อง</p>
+              {submission.receivedByAdminAt
+                ? <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">รับแล้ว</span>
+                : isAdminPhase
+                  ? <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full animate-pulse">รอรับเรื่อง</span>
+                  : <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">ดำเนินการแล้ว</span>
+              }
+            </div>
+            {submission.receivedByAdminAt && (
+              <p className="text-[10px] text-gray-400 mt-0.5">{formatDateTime(submission.receivedByAdminAt)}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Steps: Teacher approvals */}
+        {submission.approvalSteps.map((step, i) => {
+          const isActive = step.level === submission.currentApprovalLevel && submission.status === 'in-review';
+          const isTeacherRejected = step.status === 'rejected' && submission.status === 'teacher_rejected';
+
+          return (
+            <div key={i} className="relative flex gap-3 pb-3">
+              {i < submission.approvalSteps.length - 1 && (
+                <div className={`absolute left-3 top-7 bottom-0 w-0.5 ${step.status === 'approved' ? 'bg-green-300' : 'bg-gray-200'}`} />
+              )}
+              <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center z-10 ${
+                step.status === 'approved' ? 'bg-green-500' :
+                isTeacherRejected ? 'bg-orange-400' :
+                step.status === 'rejected' ? 'bg-red-500' :
+                isActive ? 'bg-yellow-400 animate-pulse' :
+                'bg-gray-200'
+              }`}>
+                {step.status === 'approved' ? <CheckCircle size={12} className="text-white" /> :
+                 isTeacherRejected ? <AlertCircle size={12} className="text-white" /> :
+                 step.status === 'rejected' ? <XCircle size={12} className="text-white" /> :
+                 isActive ? <Clock size={12} className="text-white" /> :
+                 <span className="text-[10px] text-gray-400 font-medium">{step.level + 1}</span>}
+              </div>
+              <div className="flex-1 min-w-0 pb-1">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <p className="text-xs font-medium text-gray-800">{step.roleName}</p>
+                  {step.status === 'approved' && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">อนุมัติ</span>}
+                  {isTeacherRejected && <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">รอ Admin ตรวจสอบ</span>}
+                  {step.status === 'rejected' && !isTeacherRejected && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">ไม่อนุมัติ</span>}
+                  {step.status === 'pending' && isActive && <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full animate-pulse">กำลังพิจารณา</span>}
+                  {step.status === 'pending' && !isActive && <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">รอดำเนินการ</span>}
+                </div>
+                {step.approverName && <p className="text-[10px] text-gray-500 mt-0.5">{step.approverName}{step.isSubstitute ? ' (ตัวแทน)' : ''}</p>}
+                {step.timestamp && <p className="text-[10px] text-gray-400 mt-0.5">{formatDateTime(step.timestamp)}</p>}
+                {step.comment && (
+                  <div className="mt-1 p-1.5 bg-gray-50 rounded border border-gray-100">
+                    <p className="text-[10px] text-gray-500 flex items-start gap-1">
+                      <MessageSquare size={9} className="shrink-0 mt-0.5" /> {step.comment}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Final: Admin ปิดงาน */}
+        <div className="relative flex gap-3">
+          <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center z-10 ${
+            isComplete ? 'bg-green-600' :
+            isPendingClose ? 'bg-teal-400 animate-pulse' :
+            isTerminated ? 'bg-red-200' : 'bg-gray-200'
+          }`}>
+            {isComplete ? <CheckCircle size={12} className="text-white" /> :
+             isPendingClose ? <Clock size={12} className="text-white" /> :
+             isTerminated ? <XCircle size={12} className="text-red-400" /> :
+             <span className="text-[10px] text-gray-400 font-medium">✓</span>}
+          </div>
+          <div className="flex-1 pb-1">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
+              <p className="text-xs font-medium text-gray-800">
+                {isTerminated ? 'ไม่อนุมัติ' : 'เจ้าหน้าที่ปิดงาน'}
+              </p>
+              {isComplete && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">เสร็จสมบูรณ์ ✅</span>}
+              {isPendingClose && <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full animate-pulse">รอปิดงาน</span>}
+              {isTerminated && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">ปฏิเสธ</span>}
+            </div>
+            {isComplete && submission.referenceNumber && (
+              <p className="text-[10px] text-green-700 font-mono mt-0.5">เลขที่: {submission.referenceNumber}</p>
+            )}
+            {isComplete && submission.closedAt && (
+              <p className="text-[10px] text-gray-400 mt-0.5">{formatDateTime(submission.closedAt)}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tracking Row ──────────────────────────────────────────────
+function TrackingRow({ sub, teacherId }: { sub: Submission; teacherId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [signedPreviewOpen, setSignedPreviewOpen] = useState(false);
+  const [signedPreviewUrl, setSignedPreviewUrl] = useState<string | null>(null);
+  const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
+  const hasAttachments = sub.attachments && sub.attachments.length > 0;
+
+  useEffect(() => {
+    return () => { if (signedPreviewUrl) URL.revokeObjectURL(signedPreviewUrl); };
+  }, [signedPreviewUrl]);
+
+  const handleOpenSignedPreview = async () => {
+    if (!sub.attachments?.length) return;
+    const attach = sub.attachments[0];
+    setSignedPreviewLoading(true);
+    setSignedPreviewOpen(true);
+    try {
+      const url = await previewSignedAttachmentPDF(sub, attach.url, attach.name);
+      setSignedPreviewUrl(url);
+    } catch (e) {
+      console.error(e);
+      toast.error('ไม่สามารถสร้างตัวอย่างเอกสารพร้อมลายเซ็นได้');
+      setSignedPreviewOpen(false);
+    } finally {
+      setSignedPreviewLoading(false);
+    }
+  };
+
+  const myStep = sub.approvalSteps.find(s => s.approverId === teacherId && s.status === 'approved');
+  
+  // Calculate progress percentage
+  const approvedSteps = sub.approvalSteps.filter(s => s.status === 'approved').length;
+  const totalSteps = sub.approvalSteps.length;
+  const progressPct = sub.status === 'approved' ? 100
+    : sub.status === 'rejected' ? 0
+    : Math.round((approvedSteps / totalSteps) * 100);
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-green-100 shadow-sm overflow-hidden">
+        <div className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                <FileText size={18} className="text-green-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800">{sub.formName}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                    <User size={11} /> {sub.studentName}
+                  </span>
+                  <span className="text-xs text-gray-400">•</span>
+                  <span className="text-xs text-gray-500">
+                    {sub.department}
+                  </span>
+                  <span className="text-xs text-gray-400">•</span>
+                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                    <Calendar size={11} /> เซ็นเมื่อ: {myStep?.timestamp ? formatDateTime(myStep.timestamp) : '-'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 mt-2 sm:mt-0 shrink-0">
+              {hasAttachments && (
+                <button
+                  onClick={handleOpenSignedPreview}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-violet-700 bg-violet-50 hover:bg-violet-100 transition-all font-medium"
+                  title="แสดงเอกสารพร้อมลายเซ็นอาจารย์ทุกท่านที่เซ็นแล้ว"
+                >
+                  <PenLine size={13} /> ดูเอกสารที่ลงลายเซ็นแล้ว
+                </button>
+              )}
+              <StatusBadge status={sub.status} />
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[11px] text-gray-400 font-medium">ความคืบหน้าของคำร้อง</p>
+              <p className="text-[11px] text-gray-500 font-medium">{progressPct}% ({approvedSteps}/{totalSteps} ขั้นตอน)</p>
+            </div>
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  sub.status === 'rejected' ? 'bg-red-400' : 'bg-green-500'
+                }`}
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Expander Trigger */}
+          <div className="mt-3 flex justify-start">
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 transition-colors"
+            >
+              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              {expanded ? 'ซ่อนเส้นทางการดำเนินการ' : 'ดูเส้นทางการดำเนินการ'}
+            </button>
+          </div>
+
+          {expanded && <TrackingTimeline submission={sub} />}
+        </div>
+      </div>
+
+      {/* Signed Document Preview Modal */}
+      {signedPreviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-full max-w-5xl h-[92vh]">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-white shrink-0">
+              <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                <PenLine size={17} className="text-violet-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{sub.formName}</p>
+                <p className="text-xs text-gray-500">เอกสารที่ลงลายเซ็นแล้ว — {sub.studentName}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {signedPreviewUrl && (
+                  <>
+                    <a href={signedPreviewUrl} target="_blank" rel="noopener noreferrer" title="เปิดในแท็บใหม่" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                      <ExternalLink size={16} />
+                    </a>
+                    <a href={signedPreviewUrl} download={`Signed_${sub.attachments?.[0]?.name || 'document.pdf'}`} title="ดาวน์โหลด" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                      <Download size={16} />
+                    </a>
+                  </>
+                )}
+                <button onClick={() => { setSignedPreviewOpen(false); setSignedPreviewUrl(null); }} className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            {/* Body */}
+            <div className="flex-1 relative bg-gray-200">
+              {signedPreviewLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 z-10 gap-3">
+                  <div className="w-10 h-10 border-violet-200 border-t-violet-600 rounded-full animate-spin" style={{ borderWidth: 3, borderStyle: 'solid' }} />
+                  <p className="text-sm text-gray-500">กำลังประมวลผลลายเซ็น...</p>
+                  <p className="text-xs text-gray-400">อาจใช้เวลาสักครู่</p>
+                </div>
+              )}
+              {signedPreviewUrl && !signedPreviewLoading && (
+                <iframe
+                  src={`${signedPreviewUrl}#toolbar=1`}
+                  className="w-full h-full border-0"
+                  title="เอกสารที่ลงลายเซ็นแล้ว"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────
 export function ApprovalList() {
   const { currentUser } = useAuth();
   const { submissions, approveStep } = useSubmissions();
-  const [tab, setTab] = useState<'pending' | 'history'>('pending');
+  const [tab, setTab] = useState<'pending' | 'history' | 'tracking'>('pending');
   const [batchSelected, setBatchSelected] = useState<string[]>([]);
   const [batchComment, setBatchComment] = useState('');
   const [showBatchPanel, setShowBatchPanel] = useState(false);
@@ -487,6 +771,9 @@ export function ApprovalList() {
   const pendingForMe = getSubmissionsForTeacher(teacherId, submissions);
   const historyItems = submissions.filter(s =>
     s.approvalSteps.some(step => step.approverId === teacherId && (step.status === 'approved' || step.status === 'rejected'))
+  );
+  const trackingItems = submissions.filter(s =>
+    s.approvalSteps.some(step => step.approverId === teacherId && step.status === 'approved')
   );
 
   const handleBatchApprove = () => {
@@ -515,6 +802,10 @@ export function ApprovalList() {
         </button>
         <button onClick={() => setTab('history')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${tab === 'history' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300'}`}>
           <History size={15} /> ประวัติ
+        </button>
+        <button onClick={() => setTab('tracking')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${tab === 'tracking' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300'}`}>
+          <Eye size={15} /> ติดตามสถานะ
+          {trackingItems.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${tab === 'tracking' ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700'}`}>{trackingItems.length}</span>}
         </button>
       </div>
 
@@ -576,6 +867,21 @@ export function ApprovalList() {
           ) : (
             historyItems.map(sub => (
               <HistoryRow key={sub.id} sub={sub} teacherId={teacherId} />
+            ))
+          )}
+        </div>
+      )}
+
+      {tab === 'tracking' && (
+        <div className="space-y-3">
+          {trackingItems.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border border-green-100">
+              <Eye size={40} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500 text-sm">ยังไม่มีเอกสารที่ลงนามเพื่อติดตามสถานะ</p>
+            </div>
+          ) : (
+            trackingItems.map(sub => (
+              <TrackingRow key={sub.id} sub={sub} teacherId={teacherId} />
             ))
           )}
         </div>
