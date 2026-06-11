@@ -593,8 +593,12 @@ export function AdminInbox() {
   // ── รายการตาม Tab ปัจจุบัน
   const rawItems = tab === 'new' ? newSubs : tab === 'teacher_rejected' ? rejectedSubs : closeSubs;
 
-  // ── ภาควิชาที่มีในรายการนั้น (สำหรับ dropdown กรอง)
-  const departments = Array.from(new Set(rawItems.map(s => s.department).filter(Boolean)));
+  // ── ภาควิชาทั้งหมดในคณะ (static list เพื่อให้แสดงครบทุกภาค)
+  const departments = [
+    'ภาควิชาเทคโนโลยีและการจัดการสิ่งแวดล้อม',
+    'ภาควิชาวิทยาศาสตร์สิ่งแวดล้อม',
+    'ภาควิชาสิ่งแวดล้อมเพื่อความยั่งยืน',
+  ];
 
   // ── Apply filter + sort (ไม่กระทบ count บน tab)
   const currentItems = rawItems
