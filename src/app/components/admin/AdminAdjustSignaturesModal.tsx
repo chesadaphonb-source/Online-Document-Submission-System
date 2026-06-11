@@ -406,6 +406,28 @@ export function AdminAdjustSignaturesModal({
     }));
   };
 
+  // Add extra signature block for a level
+  const handleAddExtraSignature = (level: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level) return s;
+      const extras = s.extraSignaturePositions ? [...s.extraSignaturePositions] : [];
+      // Position it slightly offset from the primary signature
+      const baseX = s.signatureX ?? 30;
+      const baseY = s.signatureY ?? 65;
+      extras.push({ x: baseX + 5, y: baseY + 5 });
+      return { ...s, extraSignaturePositions: extras };
+    }));
+  };
+
+  // Remove extra signature block for a level
+  const handleRemoveExtraSignature = (level: number, idx: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level || !s.extraSignaturePositions) return s;
+      const extras = s.extraSignaturePositions.filter((_, i) => i !== idx);
+      return { ...s, extraSignaturePositions: extras.length > 0 ? extras : undefined };
+    }));
+  };
+
   // Add a new checkmark block for a step
   const handleAddCheckmarkBlock = (level: number) => {
     setSteps(prev => prev.map(s => {
@@ -547,14 +569,36 @@ export function AdminAdjustSignaturesModal({
                             onChange={e => handleSizeChange(step.level, Number(e.target.value))}
                             className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                           />
-                          <div className="flex justify-end pt-1">
+                          <div className="flex justify-end pt-1 gap-1.5">
+                            <button
+                              onClick={() => handleAddExtraSignature(step.level)}
+                              className="text-[10px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 border border-blue-100 hover:border-blue-200 px-1.5 py-0.5 rounded bg-blue-50/50 hover:bg-blue-50 transition-colors"
+                            >
+                              <Plus size={10} /> เพิ่มลายเซ็นเสริม
+                            </button>
                             <button
                               onClick={() => handleDeleteSignature(step.level)}
                               className="text-[10px] text-red-500 hover:text-red-700 font-medium flex items-center gap-0.5 border border-red-100 hover:border-red-200 px-1.5 py-0.5 rounded bg-red-50/50 hover:bg-red-50 transition-colors"
                             >
-                              <X size={10} /> ลบลายเซ็น
+                              <X size={10} /> ลบลายเซ็นหลัก
                             </button>
                           </div>
+                          {(step.extraSignaturePositions || []).length > 0 && (
+                            <div className="space-y-1.5 pt-1.5 border-t border-gray-100 mt-2">
+                              <span className="text-[10px] text-gray-400 font-semibold block">ลายเซ็นเสริม:</span>
+                              {(step.extraSignaturePositions || []).map((pos, exIdx) => (
+                                <div key={exIdx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px]">
+                                  <span className="text-gray-500 font-medium">จุดที่ {exIdx + 2}</span>
+                                  <button
+                                    onClick={() => handleRemoveExtraSignature(step.level, exIdx)}
+                                    className="text-red-500 hover:text-red-700 font-semibold"
+                                  >
+                                    ลบ
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-1.5">
