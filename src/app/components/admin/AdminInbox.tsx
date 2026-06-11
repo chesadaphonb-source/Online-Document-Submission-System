@@ -542,7 +542,7 @@ export function AdminInbox() {
   const [tab, setTab] = useState<'new' | 'teacher_rejected' | 'pending_close'>('new');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [filterFaculty, setFilterFaculty] = useState('all');
+  const [filterDept, setFilterDept] = useState('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'deadline'>('newest');
   const [teachers, setTeachers] = useState<DBTeacher[]>([]);
 
@@ -593,8 +593,8 @@ export function AdminInbox() {
   // ── รายการตาม Tab ปัจจุบัน
   const rawItems = tab === 'new' ? newSubs : tab === 'teacher_rejected' ? rejectedSubs : closeSubs;
 
-  // ── คณะที่มีในรายการนั้น (สำหรับ dropdown กรอง)
-  const faculties = Array.from(new Set(rawItems.map(s => s.faculty).filter(Boolean)));
+  // ── ภาควิชาที่มีในรายการนั้น (สำหรับ dropdown กรอง)
+  const departments = Array.from(new Set(rawItems.map(s => s.department).filter(Boolean)));
 
   // ── Apply filter + sort (ไม่กระทบ count บน tab)
   const currentItems = rawItems
@@ -603,8 +603,8 @@ export function AdminInbox() {
         s.studentName.toLowerCase().includes(search.toLowerCase()) ||
         s.formName.toLowerCase().includes(search.toLowerCase());
       const matchType = filterType === 'all' || s.formType.includes(filterType);
-      const matchFaculty = filterFaculty === 'all' || s.faculty === filterFaculty;
-      return matchSearch && matchType && matchFaculty;
+      const matchDept = filterDept === 'all' || s.department === filterDept;
+      return matchSearch && matchType && matchDept;
     })
     .sort((a, b) => {
       if (sortBy === 'newest') return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
@@ -679,11 +679,11 @@ export function AdminInbox() {
             {formTypeOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
           </select>
 
-          {/* Filter คณะ */}
-          <select value={filterFaculty} onChange={e => setFilterFaculty(e.target.value)}
+          {/* Filter ภาควิชา */}
+          <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-green-400 bg-white">
-            <option value="all">ทุกคณะ</option>
-            {faculties.map(f => <option key={f} value={f}>{f}</option>)}
+            <option value="all">ทุกภาควิชา</option>
+            {departments.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
 
           {/* Sort */}
@@ -695,8 +695,8 @@ export function AdminInbox() {
           </select>
 
           {/* Reset */}
-          {(search || filterType !== 'all' || filterFaculty !== 'all' || sortBy !== 'newest') && (
-            <button onClick={() => { setSearch(''); setFilterType('all'); setFilterFaculty('all'); setSortBy('newest'); }}
+          {(search || filterType !== 'all' || filterDept !== 'all' || sortBy !== 'newest') && (
+            <button onClick={() => { setSearch(''); setFilterType('all'); setFilterDept('all'); setSortBy('newest'); }}
               className="px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg border border-red-200 transition-all">
               ล้างตัวกรอง
             </button>
@@ -706,7 +706,7 @@ export function AdminInbox() {
         {/* Result count */}
         <p className="text-xs text-gray-400">
           แสดง {currentItems.length} จาก {rawItems.length} รายการ
-          {search || filterType !== 'all' || filterFaculty !== 'all' ? ' (กรองแล้ว)' : ''}
+          {search || filterType !== 'all' || filterDept !== 'all' ? ' (กรองแล้ว)' : ''}
         </p>
       </div>
 
