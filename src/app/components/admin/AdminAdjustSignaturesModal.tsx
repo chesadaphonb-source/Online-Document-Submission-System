@@ -331,6 +331,39 @@ export function AdminAdjustSignaturesModal({
     setSteps(prev => prev.map(s => s.level === level ? { ...s, dateBlock: undefined, dateX: undefined, dateY: undefined, dateSize: undefined } : s));
   };
 
+  // Delete signature block for a level
+  const handleDeleteSignature = (level: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level) return s;
+      return {
+        ...s,
+        signatureData: undefined,
+        signatureX: undefined,
+        signatureY: undefined,
+        signatureSize: undefined,
+        extraSignaturePositions: undefined,
+      };
+    }));
+  };
+
+  // Add a new checkmark block for a step
+  const handleAddCheckmarkBlock = (level: number) => {
+    setSteps(prev => prev.map(s => {
+      if (s.level !== level) return s;
+      return { ...s, checkmarkBlock: '✓', checkmarkX: (s.signatureX ?? 30) - 5, checkmarkY: (s.signatureY ?? 65), checkmarkSize: 15 };
+    }));
+  };
+
+  // Update checkmark block type
+  const handleCheckmarkBlockChange = (level: number, val: string) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, checkmarkBlock: val } : s));
+  };
+
+  // Remove checkmark block
+  const handleRemoveCheckmarkBlock = (level: number) => {
+    setSteps(prev => prev.map(s => s.level === level ? { ...s, checkmarkBlock: undefined, checkmarkX: undefined, checkmarkY: undefined, checkmarkSize: undefined } : s));
+  };
+
   // Add extra text block
   const handleAddExtraTextBlock = (level: number) => {
     setSteps(prev => prev.map(s => {
@@ -425,7 +458,7 @@ export function AdminAdjustSignaturesModal({
             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">ขนาดลายเซ็นแต่ละระดับ</h4>
             
             <div className="space-y-4">
-              {steps.filter(s => s.signatureData).map((step, idx) => {
+              {steps.filter(s => s.status === 'approved' || s.signatureData || s.textBlock || s.dateBlock || s.checkmarkBlock).map((step, idx) => {
                 const colorIdx = idx % borderColors.length;
                 return (
                   <div key={step.level} className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-xs space-y-2.5">
@@ -440,20 +473,34 @@ export function AdminAdjustSignaturesModal({
                     
                     <div className="space-y-3">
                       {/* Signature size slider */}
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span>ขนาดลายเซ็น</span>
-                          <span className="font-semibold text-gray-700">{step.signatureSize || 12}%</span>
+                      {step.signatureData ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>ขนาดลายเซ็น</span>
+                            <span className="font-semibold text-gray-700">{step.signatureSize || 12}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={5}
+                            max={40}
+                            value={step.signatureSize || 12}
+                            onChange={e => handleSizeChange(step.level, Number(e.target.value))}
+                            className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <div className="flex justify-end pt-1">
+                            <button
+                              onClick={() => handleDeleteSignature(step.level)}
+                              className="text-[10px] text-red-500 hover:text-red-700 font-medium flex items-center gap-0.5 border border-red-100 hover:border-red-200 px-1.5 py-0.5 rounded bg-red-50/50 hover:bg-red-50 transition-colors"
+                            >
+                              <X size={10} /> ลบลายเซ็น
+                            </button>
+                          </div>
                         </div>
-                        <input
-                          type="range"
-                          min={5}
-                          max={40}
-                          value={step.signatureSize || 12}
-                          onChange={e => handleSizeChange(step.level, Number(e.target.value))}
-                          className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                        />
-                      </div>
+                      ) : (
+                        <div className="text-[10px] text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-2 text-center italic">
+                          ไม่มีภาพลายเซ็น (เซ็นสดบนเอกสาร)
+                        </div>
+                      )}
 
                       {/* Text block (teacher name) */}
                       <div className="space-y-1.5 pt-1.5 border-t border-gray-100">
@@ -531,23 +578,45 @@ export function AdminAdjustSignaturesModal({
                         )}
                       </div>
 
-                      {/* Checkmark size slider */}
-                      {step.checkmarkBlock && (
-                        <div className="space-y-1 pt-1 border-t border-gray-100">
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>ขนาดเครื่องหมายถูก</span>
-                            <span className="font-semibold text-gray-700">{step.checkmarkSize || 15}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={8}
-                            max={40}
-                            value={step.checkmarkSize || 15}
-                            onChange={e => handleCheckmarkSizeChange(step.level, Number(e.target.value))}
-                            className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                      )}
+                      {/* Checkmark block */}
+                      <div className="space-y-1.5 pt-1.5 border-t border-gray-100">
+                        {step.checkmarkBlock ? (
+                          <>
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span className="flex items-center gap-1">✅ เครื่องหมายถูก</span>
+                              <button onClick={() => handleRemoveCheckmarkBlock(step.level)} className="text-[10px] text-red-400 hover:text-red-600">ลบ</button>
+                            </div>
+                            <select
+                              value={step.checkmarkBlock}
+                              onChange={e => handleCheckmarkBlockChange(step.level, e.target.value)}
+                              className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1a5c2e] bg-white cursor-pointer"
+                            >
+                              <option value="✓">✓ เครื่องหมายถูกมาตรฐาน (✓)</option>
+                              <option value="✔">✔ เครื่องหมายหนาเข้ม (✔)</option>
+                              <option value="✗">✗ เครื่องหมายผิด/กากบาท (✗)</option>
+                            </select>
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span>ขนาดเครื่องหมาย</span>
+                              <span className="font-semibold text-gray-700">{step.checkmarkSize || 15}px</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={8}
+                              max={40}
+                              value={step.checkmarkSize || 15}
+                              onChange={e => handleCheckmarkSizeChange(step.level, Number(e.target.value))}
+                              className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleAddCheckmarkBlock(step.level)}
+                            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium text-[#1a5c2e] bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                          >
+                            <Plus size={12} /> เพิ่มเครื่องหมายถูก (✓)
+                          </button>
+                        )}
+                      </div>
 
                       {/* Extra text blocks (additional name/date annotations) */}
                       <div className="space-y-1.5 pt-1.5 border-t border-gray-100">
@@ -593,8 +662,8 @@ export function AdminAdjustSignaturesModal({
                   </div>
                 );
               })}
-              {steps.filter(s => s.signatureData).length === 0 && (
-                <p className="text-xs text-gray-400 italic text-center py-6">เอกสารนี้ยังไม่มีลายเซ็นอาจารย์ลงนาม</p>
+              {steps.filter(s => s.status === 'approved' || s.signatureData || s.textBlock || s.dateBlock || s.checkmarkBlock).length === 0 && (
+                <p className="text-xs text-gray-400 italic text-center py-6">ไม่มีรายชื่อผู้อนุมัติหรือข้อมูลลงนาม</p>
               )}
             </div>
 
