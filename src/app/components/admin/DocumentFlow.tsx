@@ -302,8 +302,8 @@ function SubmissionRow({ sub }: { sub: Submission }) {
         <AdminAdjustSignaturesModal
           submission={sub}
           onClose={() => setAdjustOpen(false)}
-          onSave={async (updatedSteps, applyToAllActive) => {
-            await updateSignaturePositions(sub.id, sub.formType, updatedSteps, applyToAllActive, currentUser?.name || currentUser?.email || 'Super Admin');
+          onSave={async (updatedSteps, targetSubmissionIds) => {
+            await updateSignaturePositions(sub.id, sub.formType, updatedSteps, targetSubmissionIds, currentUser?.name || currentUser?.email || 'Super Admin');
             if (signedPreviewUrl) {
               URL.revokeObjectURL(signedPreviewUrl);
               setSignedPreviewUrl(null);

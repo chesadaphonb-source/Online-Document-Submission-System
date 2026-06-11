@@ -49,7 +49,7 @@ interface SubmissionsContextType {
     submissionId: string,
     formType: FormTypeId,
     updatedSteps: ApprovalStep[],
-    applyToAllActive: boolean,
+    targetSubmissionIds: string[],
     adminName?: string
   ) => Promise<void>;
 }
@@ -668,7 +668,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
     submissionId: string,
     formType: FormTypeId,
     updatedSteps: ApprovalStep[],
-    applyToAllActive: boolean,
+    targetSubmissionIds: string[],
     adminName?: string
   ) => {
     const now = new Date().toISOString();
@@ -686,7 +686,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
         dbUpdates.push({ id: s.id, steps: updatedSteps, extraChanges });
         return { ...s, approvalSteps: updatedSteps, updatedAt: now, ...extraChanges };
       }
-      if (applyToAllActive && s.formType === formType && s.status !== 'approved' && s.status !== 'rejected') {
+      if (targetSubmissionIds.includes(s.id)) {
         const newSteps = s.approvalSteps.map(step => {
           const matchingUpdatedStep = updatedSteps.find(us => us.level === step.level);
           if (!matchingUpdatedStep) return step;
