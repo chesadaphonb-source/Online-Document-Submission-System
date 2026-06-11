@@ -83,6 +83,7 @@ export interface FormTemplate {
   bgClass: string;
   iconBg: string;
   campus?: string;
+  degree_level?: string;
 }
 
 export interface ApprovalStep {

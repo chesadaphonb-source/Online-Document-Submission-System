@@ -61,8 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   campus: profile.campus || 'bangkhen',
                 };
                 if (updatedUser.role === 'teacher') {
-                  const { data: teacherProfile } = await supabase
-                    .from('teachers')
+                  const { data: teacherProfile } = await supabase!.from('teachers')
                     .select('*')
                     .eq('user_id', profile.id)
                     .single();
