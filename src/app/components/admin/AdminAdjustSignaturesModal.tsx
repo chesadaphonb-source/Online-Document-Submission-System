@@ -148,19 +148,49 @@ export function AdminAdjustSignaturesModal({
 
     (async () => {
       try {
-        const { data, error } = await supabase
+        // Stage 1: Query teachers table
+        const { data: teachersData, error: teachersError } = await supabase
           .from('teachers')
           .select('user_id, signature_data')
           .in('user_id', approverIds);
-        if (data && !error) {
-          const mapping: Record<string, string> = {};
-          data.forEach(row => {
+
+        const mapping: Record<string, string> = {};
+        if (teachersData && !teachersError) {
+          teachersData.forEach(row => {
             if (row.signature_data) {
               mapping[row.user_id] = row.signature_data;
             }
           });
-          setDbSignatures(mapping);
         }
+
+        // Identify which approvers are still missing signature data
+        const missingIds = approverIds.filter(id => !mapping[id]);
+
+        // Stage 2: Fallback - query submissions table for last 50 submissions
+        if (missingIds.length > 0) {
+          const { data: subsData, error: subsError } = await supabase
+            .from('submissions')
+            .select('approval_steps')
+            .order('updated_at', { ascending: false })
+            .limit(50);
+
+          if (subsData && !subsError) {
+            for (const sub of subsData) {
+              const stepsArray = sub.approval_steps;
+              if (Array.isArray(stepsArray)) {
+                for (const step of stepsArray) {
+                  if (step && step.approverId && step.signatureData) {
+                    if (missingIds.includes(step.approverId) && !mapping[step.approverId]) {
+                      mapping[step.approverId] = step.signatureData;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        setDbSignatures(mapping);
       } catch (err) {
         console.error('Failed to load DB signatures:', err);
       }
@@ -534,7 +564,7 @@ export function AdminAdjustSignaturesModal({
                           {step.approverId && dbSignatures[step.approverId] ? (
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 const sig = dbSignatures[step.approverId!];
                                 setSteps(prev => prev.map(s => s.level === step.level ? {
                                   ...s,
@@ -544,6 +574,22 @@ export function AdminAdjustSignaturesModal({
                                   signatureSize: s.signatureSize ?? 12
                                 } : s));
                                 toast.success('นำเข้าลายเซ็นจากระบบเรียบร้อยแล้ว');
+
+                                if (isSupabaseConfigured && supabase) {
+                                  try {
+                                    const { error } = await supabase
+                                      .from('teachers')
+                                      .update({ signature_data: sig })
+                                      .eq('user_id', step.approverId);
+                                    if (error) {
+                                      console.error('Failed to auto-save signature to profile:', error);
+                                    } else {
+                                      toast.success('บันทึกรูปภาพลายเซ็นไปยังโปรไฟล์อาจารย์สำเร็จ');
+                                    }
+                                  } catch (dbErr) {
+                                    console.error('DB update exception:', dbErr);
+                                  }
+                                }
                               }}
                               className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                             >
