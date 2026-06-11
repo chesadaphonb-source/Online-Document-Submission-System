@@ -384,7 +384,7 @@ export function SubmitForm() {
       category: (dbForm.category as any) || 'general',
       estimatedDays: 5,
       approvalLevels: (dbForm.workflow_steps || ['advisor', 'department_head', 'dean']).map((stepType, idx) => {
-        let role = 'ระดับที่ ' + (idx + 1);
+        let role = stepType;
         if (stepType === 'advisor') role = 'อาจารย์ที่ปรึกษา';
         else if (stepType === 'department_head' || stepType === 'head') role = 'หัวหน้าภาควิชา';
         else if (stepType === 'dean') role = 'คณบดีหรือผู้แทน';
@@ -529,7 +529,7 @@ export function SubmitForm() {
 
   const displayApprovalLevels = (currentFormRecord?.workflow_steps && Array.isArray(currentFormRecord.workflow_steps) && currentFormRecord.workflow_steps.length > 0)
     ? currentFormRecord.workflow_steps.map((stepType, index) => {
-        let role = 'ระดับที่ ' + (index + 1);
+        let role = stepType;
         if (stepType === 'advisor') role = 'อาจารย์ที่ปรึกษา';
         else if (stepType === 'department_head' || stepType === 'head') role = 'หัวหน้าภาควิชา';
         else if (stepType === 'dean') role = 'คณบดีหรือผู้แทน';
@@ -633,6 +633,13 @@ export function SubmitForm() {
             roleName: 'คณบดี/ผู้แทน',
             approverId: deanId,
             approverName: deanName,
+            status: 'pending',
+          });
+        } else {
+          // Custom approval step (e.g. 'ประธานหลักสูตร')
+          approvalSteps.push({
+            level: stepLevel++,
+            roleName: stepType,
             status: 'pending',
           });
         }

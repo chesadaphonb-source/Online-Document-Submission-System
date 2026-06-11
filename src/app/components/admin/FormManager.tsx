@@ -172,25 +172,85 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-400 resize-none" />
           </div>
           <div>
-            <label className="block text-sm text-gray-700 mb-1.5 font-medium">เส้นทางการอนุมัติ (Workflow)</label>
-            <div className="flex flex-wrap gap-2 mb-1 text-xs">
-              {['advisor', 'department_head', 'dean'].map(step => (
-                <button
-                  key={step}
-                  onClick={() => {
-                    setWorkflowSteps(prev => 
-                      prev.includes(step) ? prev.filter(s => s !== step) : [...prev, step]
-                    );
-                  }}
-                  className={`px-3 py-1.5 rounded-full border transition-colors ${
-                    workflowSteps.includes(step) ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-50 text-gray-500 border-gray-200'
-                  }`}
-                >
-                  {step === 'advisor' ? 'อาจารย์ที่ปรึกษา' : step === 'department_head' ? 'หัวหน้าภาควิชา' : 'คณบดี'}
-                </button>
-              ))}
+            <label className="block text-sm text-gray-700 mb-1.5 font-medium">เส้นทางการอนุมัติ (Workflow - สูงสุด 6 ขั้นตอน)</label>
+            <div className="space-y-2 mb-2">
+              {workflowSteps.map((step, idx) => {
+                const isLast = idx === workflowSteps.length - 1;
+                const isCustom = step !== 'advisor' && step !== 'department_head' && step !== 'dean';
+                return (
+                  <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                    <span className="text-xs font-semibold text-gray-500 bg-gray-200 w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    {isLast ? (
+                      <span className="text-xs font-semibold text-green-800 bg-green-50 px-2 py-0.5 rounded border border-green-200 flex-1">
+                        คณบดีหรือผู้แทน (บังคับขั้นตอนสุดท้าย)
+                      </span>
+                    ) : (
+                      <>
+                        <select
+                          value={isCustom ? 'custom' : step}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setWorkflowSteps(prev => {
+                              const copy = [...prev];
+                              copy[idx] = val === 'custom' ? 'ประธานหลักสูตร' : val;
+                              return copy;
+                            });
+                          }}
+                          className="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 bg-white cursor-pointer"
+                        >
+                          <option value="advisor">อาจารย์ที่ปรึกษา</option>
+                          <option value="department_head">หัวหน้าภาควิชา</option>
+                          <option value="custom">อื่นๆ (ระบุเอง)...</option>
+                        </select>
+                        {isCustom && (
+                          <input
+                            type="text"
+                            value={step}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setWorkflowSteps(prev => {
+                                const copy = [...prev];
+                                copy[idx] = val;
+                                return copy;
+                              });
+                            }}
+                            placeholder="เช่น ประธานหลักสูตร"
+                            className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 bg-white"
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorkflowSteps(prev => prev.filter((_, i) => i !== idx));
+                          }}
+                          className="text-red-400 hover:text-red-600 p-1 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <p className="text-xs text-gray-400">เลือกผู้ที่ต้องเซ็นอนุมัติในแบบฟอร์มนี้ (เรียงตามลำดับ)</p>
+            {workflowSteps.length < 6 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkflowSteps(prev => {
+                    const copy = [...prev];
+                    copy.splice(copy.length - 1, 0, 'advisor');
+                    return copy;
+                  });
+                }}
+                className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 border border-green-200 rounded-lg transition-colors cursor-pointer"
+              >
+                <Plus size={12} /> เพิ่มขั้นตอนอนุมัติ
+              </button>
+            )}
+            <p className="text-[10px] text-gray-400 mt-1">สามารถกำหนดตำแหน่งอื่นแทรกระหว่างทางได้ เช่น ประธานหลักสูตร (สูงสุด 6 ขั้นตอน และต้องจบด้วยคณบดีเสมอ)</p>
           </div>
           {/* File Upload */}
           <div>
@@ -239,7 +299,19 @@ function EditFormModal({ form, onClose, onSuccess }: { form: FormItem; onClose: 
   const [description, setDescription] = useState(form.description || '');
   const [category, setCategory] = useState(form.category);
   const [requiredDocs, setRequiredDocs] = useState<string[]>(form.required_docs || []);
-  const [workflowSteps, setWorkflowSteps] = useState<string[]>(form.workflow_steps || ['advisor', 'department_head', 'dean']);
+  const [workflowSteps, setWorkflowSteps] = useState<string[]>(() => {
+    const initSteps = [...(form.workflow_steps || ['advisor', 'department_head', 'dean'])];
+    if (initSteps.length === 0) {
+      initSteps.push('dean');
+    } else if (initSteps[initSteps.length - 1] !== 'dean') {
+      const deanIdx = initSteps.indexOf('dean');
+      if (deanIdx >= 0) {
+        initSteps.splice(deanIdx, 1);
+      }
+      initSteps.push('dean');
+    }
+    return initSteps;
+  });
   const [newDoc, setNewDoc] = useState('');
   const [saving, setSaving] = useState(false);
   const [degreeLevel, setDegreeLevel] = useState(form.degree_level || 'all');
@@ -318,25 +390,85 @@ function EditFormModal({ form, onClose, onSuccess }: { form: FormItem; onClose: 
           </div>
 
           <div>
-            <label className="block text-sm text-gray-700 mb-1.5 font-medium">เส้นทางการอนุมัติ (Workflow)</label>
-            <div className="flex flex-wrap gap-2 mb-1 text-xs">
-              {['advisor', 'department_head', 'dean'].map(step => (
-                <button
-                  key={step}
-                  onClick={() => {
-                    setWorkflowSteps(prev => 
-                      prev.includes(step) ? prev.filter(s => s !== step) : [...prev, step]
-                    );
-                  }}
-                  className={`px-3 py-1.5 rounded-full border transition-colors ${
-                    workflowSteps.includes(step) ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-50 text-gray-500 border-gray-200'
-                  }`}
-                >
-                  {step === 'advisor' ? 'อาจารย์ที่ปรึกษา' : step === 'department_head' ? 'หัวหน้าภาควิชา' : 'คณบดี'}
-                </button>
-              ))}
+            <label className="block text-sm text-gray-700 mb-1.5 font-medium">เส้นทางการอนุมัติ (Workflow - สูงสุด 6 ขั้นตอน)</label>
+            <div className="space-y-2 mb-2">
+              {workflowSteps.map((step, idx) => {
+                const isLast = idx === workflowSteps.length - 1;
+                const isCustom = step !== 'advisor' && step !== 'department_head' && step !== 'dean';
+                return (
+                  <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                    <span className="text-xs font-semibold text-gray-500 bg-gray-200 w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    {isLast ? (
+                      <span className="text-xs font-semibold text-green-800 bg-green-50 px-2 py-0.5 rounded border border-green-200 flex-1">
+                        คณบดีหรือผู้แทน (บังคับขั้นตอนสุดท้าย)
+                      </span>
+                    ) : (
+                      <>
+                        <select
+                          value={isCustom ? 'custom' : step}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setWorkflowSteps(prev => {
+                              const copy = [...prev];
+                              copy[idx] = val === 'custom' ? 'ประธานหลักสูตร' : val;
+                              return copy;
+                            });
+                          }}
+                          className="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 bg-white cursor-pointer"
+                        >
+                          <option value="advisor">อาจารย์ที่ปรึกษา</option>
+                          <option value="department_head">หัวหน้าภาควิชา</option>
+                          <option value="custom">อื่นๆ (ระบุเอง)...</option>
+                        </select>
+                        {isCustom && (
+                          <input
+                            type="text"
+                            value={step}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setWorkflowSteps(prev => {
+                                const copy = [...prev];
+                                copy[idx] = val;
+                                return copy;
+                              });
+                            }}
+                            placeholder="เช่น ประธานหลักสูตร"
+                            className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-green-400 bg-white"
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorkflowSteps(prev => prev.filter((_, i) => i !== idx));
+                          }}
+                          className="text-red-400 hover:text-red-600 p-1 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <p className="text-xs text-gray-400">เลือกผู้ที่ต้องเซ็นอนุมัติในแบบฟอร์มนี้</p>
+            {workflowSteps.length < 6 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkflowSteps(prev => {
+                    const copy = [...prev];
+                    copy.splice(copy.length - 1, 0, 'advisor');
+                    return copy;
+                  });
+                }}
+                className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 border border-green-200 rounded-lg transition-colors cursor-pointer"
+              >
+                <Plus size={12} /> เพิ่มขั้นตอนอนุมัติ
+              </button>
+            )}
+            <p className="text-[10px] text-gray-400 mt-1">สามารถกำหนดตำแหน่งอื่นแทรกระหว่างทางได้ เช่น ประธานหลักสูตร (สูงสุด 6 ขั้นตอน และต้องจบด้วยคณบดีเสมอ)</p>
           </div>
 
           {/* Required Docs Editor */}
