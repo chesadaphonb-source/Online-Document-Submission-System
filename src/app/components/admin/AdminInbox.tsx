@@ -554,13 +554,18 @@ export function AdminInbox() {
       .eq('role', 'teacher')
       .then(({ data }) => {
         if (data) {
-          const mapped = (data as any[]).map(u => ({
-            id: u.id, name: u.name, department: u.department,
-            position: u.teachers?.position ?? '',
-            is_advisor: u.teachers?.is_advisor ?? false,
-            is_department_head: u.teachers?.is_department_head ?? false,
-            is_dean: u.teachers?.is_dean ?? false,
-          }));
+          const mapped = (data as any[]).map(u => {
+            const t = Array.isArray(u.teachers) ? u.teachers[0] : u.teachers;
+            return {
+              id: u.id,
+              name: u.name,
+              department: u.department,
+              position: t?.position ?? '',
+              is_advisor: t?.is_advisor ?? false,
+              is_department_head: t?.is_department_head ?? false,
+              is_dean: t?.is_dean ?? false,
+            };
+          });
           setTeachers(mapped);
         }
       });
