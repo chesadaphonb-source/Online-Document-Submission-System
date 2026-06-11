@@ -334,12 +334,11 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
 
 
                 {step.roleName.includes('คณบดี') && (() => {
-                  // ระดับ 3: คณบดี — แยกเป็น คณบดี vs ผู้แทนคณบดี (Default เป็น อ.ตุลวิทย์)
-                  const allDeans = teachers.filter(t => t.is_dean);
-                  const primaryDean = allDeans.find(t => t.name.includes('ตุลวิทย์'));
-                  const deputyDeans = allDeans.filter(t => !t.name.includes('ตุลวิทย์'));
+                  // ระดับ 3: คณบดี — แสดงคณบดีจริง (is_dean=true) + อาจารย์ทุกคนเป็นตัวเลือกผู้แทน
+                  const primaryDean = teachers.find(t => t.is_dean);
+                  const otherTeachers = teachers.filter(t => !t.is_dean);
                   
-                  const defaultId = primaryDean?.id || allDeans[0]?.id || '';
+                  const defaultId = primaryDean?.id || '';
                   const currentVal = assignedStep[step.level] || defaultId;
 
                   // Sync default กลับเข้า state
@@ -363,16 +362,16 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
                           <option value={primaryDean.id}>● {primaryDean.name}{primaryDean.position ? ` (${primaryDean.position})` : ''}</option>
                         </optgroup>
                       )}
-                      {deputyDeans.length > 0 && (
-                        <optgroup label="-- ผู้แทนคณบดี">
-                          {deputyDeans.map(t => (
+                      {otherTeachers.length > 0 && (
+                        <optgroup label="-- แต่งตั้งผู้แทนคณบดี (Admin กำหนด)">
+                          {otherTeachers.map(t => (
                             <option key={t.id} value={t.id}>
-                              {t.name}{t.position ? ` (${t.position})` : ''}
+                              {t.name}{t.department ? ` (${t.department})` : ''}{t.is_department_head ? ' — หัวหน้าภาค' : ''}
                             </option>
                           ))}
                         </optgroup>
                       )}
-                      {allDeans.length === 0 && (
+                      {!primaryDean && otherTeachers.length === 0 && (
                         <option disabled>ไม่พบคณบดีในระบบ</option>
                       )}
                     </select>
