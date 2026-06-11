@@ -308,7 +308,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
                 {step.roleName === 'หัวหน้าภาควิชา' && (() => {
                   // ระดับ 2: หัวหน้าภาค — แสดงหัวหน้าภาคก่อน
                   const deptList = deptTeachers(sub.department);
-                  const deptHeads = deptList.filter(t => t.is_department_head);
+                  const deptHeads = teachers.filter(t => t.is_department_head);
                   const others = deptList.filter(t => !t.is_department_head);
                   return (
                     <select
@@ -319,7 +319,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
                       <option value="">— เลือกหัวหน้าภาค —</option>
                       {deptHeads.length > 0 && (
                         <optgroup label="★ หัวหน้าภาควิชา">
-                          {deptHeads.map(t => <option key={t.id} value={t.id}>● {t.name}</option>)}
+                          {deptHeads.map(t => <option key={t.id} value={t.id}>● {t.name} ({t.department || 'ไม่ระบุภาค'})</option>)}
                         </optgroup>
                       )}
                       {others.length > 0 && (
