@@ -85,7 +85,7 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     try {
       let fileUrl = '';
       const activeStorage = supabaseStorage || supabase;
-      if (isSupabaseConfigured && activeStorage) {
+      if (isSupabaseConfigured && activeStorage && supabase) {
         // Sanitize file name for Supabase storage path to avoid "Invalid key" errors with Thai/special characters
         const ext = file.name.split('.').pop() || '';
         const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
