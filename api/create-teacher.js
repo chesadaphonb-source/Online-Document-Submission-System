@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
-  const { email, password, name, department, position, isAdvisor, isDepartmentHead, isDean } = req.body;
+  const { email, password, name, department, position, isAdvisor, isDepartmentHead, isDean, role = 'teacher' } = req.body;
 
   if (!email || !password || !name) {
     return res.status(400).json({ error: 'กรุณากรอกข้อมูล อีเมล, รหัสผ่าน และชื่อ-นามสกุล ให้ครบถ้วน' });
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
         id: userId,
         email: email.trim().toLowerCase(),
         name: name.trim(),
-        role: 'teacher',
+        role: role || 'teacher',
         department: department || '',
         faculty: 'คณะสิ่งแวดล้อม',
         plain_password: password
@@ -59,23 +59,25 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Users Profile Error: ${userError.message}` });
     }
 
-    // 3. บันทึกข้อมูลลงตาราง public.teachers
-    const { error: teacherError } = await supabaseAdmin
-      .from('teachers')
-      .insert({
-        user_id: userId,
-        position: position || 'อาจารย์',
-        is_advisor: !!isAdvisor,
-        is_department_head: !!isDepartmentHead,
-        is_dean: !!isDean
-      });
+    // 3. บันทึกข้อมูลลงตาราง public.teachers (เฉพาะบทบาทอาจารย์)
+    if (role === 'teacher') {
+      const { error: teacherError } = await supabaseAdmin
+        .from('teachers')
+        .insert({
+          user_id: userId,
+          position: position || 'อาจารย์',
+          is_advisor: !!isAdvisor,
+          is_department_head: !!isDepartmentHead,
+          is_dean: !!isDean
+        });
 
-    if (teacherError) {
-      console.error('[create-teacher] Teachers table insert error:', teacherError.message);
-      // Rollback both
-      await supabaseAdmin.from('users').delete().eq('id', userId);
-      await supabaseAdmin.auth.admin.deleteUser(userId);
-      return res.status(400).json({ error: `Teachers Profile Error: ${teacherError.message}` });
+      if (teacherError) {
+        console.error('[create-teacher] Teachers table insert error:', teacherError.message);
+        // Rollback both
+        await supabaseAdmin.from('users').delete().eq('id', userId);
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        return res.status(400).json({ error: `Teachers Profile Error: ${teacherError.message}` });
+      }
     }
 
     return res.status(200).json({
@@ -84,13 +86,13 @@ export default async function handler(req, res) {
         id: userId,
         email: email.trim().toLowerCase(),
         name: name.trim(),
-        role: 'teacher',
+        role: role || 'teacher',
         department: department || '',
         faculty: 'คณะสิ่งแวดล้อม',
-        position: position || 'อาจารย์',
-        is_advisor: !!isAdvisor,
-        is_department_head: !!isDepartmentHead,
-        is_dean: !!isDean
+        position: role === 'teacher' ? (position || 'อาจารย์') : '',
+        is_advisor: role === 'teacher' ? !!isAdvisor : false,
+        is_department_head: role === 'teacher' ? !!isDepartmentHead : false,
+        is_dean: role === 'teacher' ? !!isDean : false
       }
     });
   } catch (err) {

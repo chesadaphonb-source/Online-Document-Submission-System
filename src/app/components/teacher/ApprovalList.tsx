@@ -39,7 +39,8 @@ interface ApprovalModalProps {
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
     extraSignaturePositions?: Array<{ x: number; y: number }>,
-    signatureSize?: number
+    signatureSize?: number,
+    page?: number
   ) => void;
   onReject: (comment: string) => void;
   onClose: () => void;
@@ -48,6 +49,7 @@ interface ApprovalModalProps {
 function ApprovalModal({ submission, initialSignature, onApprove, onReject, onClose }: ApprovalModalProps) {
   const [comment, setComment] = useState('');
   const [action, setAction] = useState<'approve' | 'reject' | null>(null);
+  const [skipSignature, setSkipSignature] = useState(false);
   const [showSignAndPlace, setShowSignAndPlace] = useState(false);
 
   const handleConfirm = async () => {
@@ -57,7 +59,12 @@ function ApprovalModal({ submission, initialSignature, onApprove, onReject, onCl
       return;
     }
     if (action === 'approve') {
-      setShowSignAndPlace(true);
+      if (skipSignature) {
+        onApprove(comment || 'อนุมัติ (ผ่านระบบโดยไม่ลงลายเซ็นดิจิทัลเนื่องจากลงนามบนเอกสารจริงแล้ว)');
+        onClose();
+      } else {
+        setShowSignAndPlace(true);
+      }
     } else {
       onReject(comment);
       onClose();
@@ -71,8 +78,8 @@ function ApprovalModal({ submission, initialSignature, onApprove, onReject, onCl
         attachments={submission.attachments || []}
         existingSteps={submission.approvalSteps}
         currentLevel={submission.currentApprovalLevel}
-        onConfirm={(sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize) => {
-          onApprove(comment || 'อนุมัติ', sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize);
+        onConfirm={(sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize, page) => {
+          onApprove(comment || 'อนุมัติ', sigData, posX, posY, textBlock, textX, textY, textSize, dateBlock, dateX, dateY, checkmarkBlock, checkmarkX, checkmarkY, dateSize, extraTextBlocks, extraSigPos, sigSize, page);
           onClose();
         }}
         onCancel={onClose}
@@ -104,6 +111,22 @@ function ApprovalModal({ submission, initialSignature, onApprove, onReject, onCl
               <span className={`text-sm ${action === 'reject' ? 'text-red-700 font-medium' : 'text-gray-600'}`}>ไม่อนุมัติ</span>
             </button>
           </div>
+          
+          {action === 'approve' && (
+            <label className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={skipSignature}
+                onChange={e => setSkipSignature(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer mt-0.5 shrink-0"
+              />
+              <div className="flex-1">
+                <span className="font-semibold block text-blue-900">ข้ามการลงลายเซ็นดิจิทัล</span>
+                <span className="text-[10px] text-blue-700 block mt-0.5">ใช้กรณีที่นิสิตส่งเอกสารที่เซ็นด้วยปากกาจริงเรียบร้อยแล้ว</span>
+              </div>
+            </label>
+          )}
+
           {action === 'reject' && (
             <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200 flex gap-2 text-xs text-yellow-800">
               <AlertCircle size={14} className="shrink-0 mt-0.5" />
@@ -194,7 +217,8 @@ function PendingCard({ sub, teacherId, teacherName, initialSignature }: { sub: S
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
     extraSignaturePositions?: Array<{ x: number; y: number }>,
-    signatureSize?: number
+    signatureSize?: number,
+    page?: number
   ) => {
     approveStep(
       sub.id,
@@ -218,7 +242,8 @@ function PendingCard({ sub, teacherId, teacherName, initialSignature }: { sub: S
       dateSize,
       extraTextBlocks,
       extraSignaturePositions,
-      signatureSize
+      signatureSize,
+      page
     );
     toast.success('อนุมัติคำร้องเรียบร้อยแล้ว');
   };
@@ -763,10 +788,15 @@ export function ApprovalList() {
   const [batchSelected, setBatchSelected] = useState<string[]>([]);
   const [batchComment, setBatchComment] = useState('');
   const [showBatchPanel, setShowBatchPanel] = useState(false);
+  const [levelFilter, setLevelFilter] = useState<'all' | 'level1' | 'level2' | 'level3'>('all');
 
   const teacher = currentUser as any;
   const teacherName = teacher?.name || '';
   const teacherId = currentUser?.id || '';
+
+  const isDeptHead = !!teacher?.isDepartmentHead;
+  const isDean = !!teacher?.isDean;
+  const showLevelTabs = isDeptHead || isDean;
 
   const pendingForMe = getSubmissionsForTeacher(teacherId, submissions);
   const historyItems = submissions.filter(s =>
@@ -775,6 +805,16 @@ export function ApprovalList() {
   const trackingItems = submissions.filter(s =>
     s.approvalSteps.some(step => step.approverId === teacherId && step.status === 'approved')
   );
+
+  const pendingLevel1 = pendingForMe.filter(s => s.currentApprovalLevel === 1);
+  const pendingLevel2 = pendingForMe.filter(s => s.currentApprovalLevel === 2);
+  const pendingLevel3 = pendingForMe.filter(s => s.currentApprovalLevel >= 3);
+
+  const displayedPending = !showLevelTabs ? pendingForMe :
+                           levelFilter === 'level1' ? pendingLevel1 :
+                           levelFilter === 'level2' ? pendingLevel2 :
+                           levelFilter === 'level3' ? pendingLevel3 :
+                           pendingForMe;
 
   const handleBatchApprove = () => {
     if (batchSelected.length === 0) return;
@@ -787,7 +827,14 @@ export function ApprovalList() {
   };
 
   const toggleSelect = (id: string) => setBatchSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  const selectAll = () => setBatchSelected(batchSelected.length === pendingForMe.length ? [] : pendingForMe.map(s => s.id));
+  const selectAll = () => setBatchSelected(batchSelected.length === displayedPending.length ? [] : displayedPending.map(s => s.id));
+
+  // Reset sub-filter when switching main tabs
+  useEffect(() => {
+    setLevelFilter('all');
+    setBatchSelected([]);
+    setShowBatchPanel(false);
+  }, [tab]);
 
   return (
     <div className="space-y-5">
@@ -809,12 +856,81 @@ export function ApprovalList() {
         </button>
       </div>
 
+      {tab === 'pending' && showLevelTabs && (
+        <div className="flex flex-wrap gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200 w-fit animate-fade-in">
+          <button
+            onClick={() => setLevelFilter('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              levelFilter === 'all'
+                ? 'bg-white text-green-700 shadow-sm border border-green-100'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <span>ทุกระดับ</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+              levelFilter === 'all' ? 'bg-green-100 text-green-700 font-bold' : 'bg-gray-200 text-gray-600'
+            }`}>
+              {pendingForMe.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setLevelFilter('level1')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              levelFilter === 'level1'
+                ? 'bg-white text-green-700 shadow-sm border border-green-100'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <span>ระดับ 1 (อาจารย์ที่ปรึกษา)</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+              levelFilter === 'level1' ? 'bg-green-100 text-green-700 font-bold' : 'bg-gray-200 text-gray-600'
+            }`}>
+              {pendingLevel1.length}
+            </span>
+          </button>
+          {isDeptHead && (
+            <button
+              onClick={() => setLevelFilter('level2')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                levelFilter === 'level2'
+                  ? 'bg-white text-green-700 shadow-sm border border-green-100'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <span>ระดับ 2 (หัวหน้าภาควิชา)</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                levelFilter === 'level2' ? 'bg-green-100 text-green-700 font-bold' : 'bg-gray-200 text-gray-600'
+              }`}>
+                {pendingLevel2.length}
+              </span>
+            </button>
+          )}
+          {isDean && (
+            <button
+              onClick={() => setLevelFilter('level3')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                levelFilter === 'level3'
+                  ? 'bg-white text-green-700 shadow-sm border border-green-100'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <span>ระดับ 3 (คณบดี)</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                levelFilter === 'level3' ? 'bg-green-100 text-green-700 font-bold' : 'bg-gray-200 text-gray-600'
+              }`}>
+                {pendingLevel3.length}
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+
       {tab === 'pending' && (
         <>
-          {pendingForMe.length > 1 && (
+          {displayedPending.length > 1 && (
             <div className="flex items-center gap-3 flex-wrap">
               <button onClick={selectAll} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 hover:border-green-300 transition-all">
-                <CheckSquare size={13} /> {batchSelected.length === pendingForMe.length ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
+                <CheckSquare size={13} /> {batchSelected.length === displayedPending.length ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
               </button>
               {batchSelected.length > 0 && (
                 <button onClick={() => setShowBatchPanel(!showBatchPanel)} className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs">
@@ -824,7 +940,7 @@ export function ApprovalList() {
             </div>
           )}
           {showBatchPanel && batchSelected.length > 0 && (
-            <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+            <div className="p-4 bg-green-50 rounded-xl border border-green-200 animate-fade-in">
               <p className="text-sm text-green-800 font-medium mb-3">อนุมัติแบบกลุ่ม ({batchSelected.length} รายการ)</p>
               <textarea rows={2} value={batchComment} onChange={e => setBatchComment(e.target.value)} placeholder="ความคิดเห็น (ไม่บังคับ)" className="w-full px-3 py-2 border border-green-200 rounded-lg text-sm focus:outline-none focus:border-green-400 resize-none mb-3" />
               <div className="flex gap-2">
@@ -833,14 +949,14 @@ export function ApprovalList() {
               </div>
             </div>
           )}
-          {pendingForMe.length === 0 ? (
+          {displayedPending.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-green-100">
               <CheckCircle size={40} className="mx-auto text-green-300 mb-3" />
-              <p className="text-gray-500 text-sm">ไม่มีคำร้องที่รอการพิจารณา</p>
+              <p className="text-gray-500 text-sm">ไม่มีคำร้องที่รอการพิจารณาในระดับนี้</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {pendingForMe.map(sub => (
+              {displayedPending.map(sub => (
                 <div key={sub.id} className="relative">
                   {batchSelected.length > 0 && (
                     <div onClick={() => toggleSelect(sub.id)} className={`absolute top-3 left-3 z-10 w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-all ${batchSelected.includes(sub.id) ? 'bg-green-600 border-green-600' : 'bg-white border-gray-300'}`}>

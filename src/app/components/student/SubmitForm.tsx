@@ -57,9 +57,9 @@ function FormDownloadSection({
     supabase.from('forms_library').select('id,name,description,category,file_url,file_name,required_docs,campus,degree_level')
       .eq('is_active', true)
       .order('category')
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (data) {
-          setForms(data.filter((f: any) => {
+          const processed = data.filter((f: any) => {
             const campus = f.campus || 'bangkhen';
             const degreeLevel = f.degree_level || 'all';
 
@@ -67,7 +67,21 @@ function FormDownloadSection({
             const matchDegree = selectedDegreeLevel === 'all' || degreeLevel === 'all' || degreeLevel === selectedDegreeLevel;
 
             return matchCampus && matchDegree;
+          });
+
+          const { getCachedFileUrl } = await import('../../lib/fileCache');
+          const resolved = await Promise.all(processed.map(async f => {
+            if (f.file_url) {
+              try {
+                const cached = await getCachedFileUrl(f.file_url);
+                return { ...f, file_url: cached };
+              } catch (e) {
+                console.error(e);
+              }
+            }
+            return f;
           }));
+          setForms(resolved);
         }
       });
   }, [selectedCampus, selectedDegreeLevel]);

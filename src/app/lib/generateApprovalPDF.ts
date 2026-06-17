@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import type { Submission } from '../data/mockData';
 import { THSarabun_Base64 } from './fonts/Sarabun';
 import { toast } from 'sonner';
+import { getCachedFileBlob } from './fileCache';
 
 // ── Thai text (Latin fallback) ──────────────────────────────────
 // jsPDF ไม่รองรับ Thai font โดยตรง → ใช้ transliteration / English label
@@ -247,40 +248,46 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
     // Draw Signature
     if (step.signatureData) {
       try {
+        const cleanSig = await makeBackgroundTransparent(step.signatureData);
         // A4 page: 210mm wide × 297mm tall. LM=20, usable width=170
         if (step.signatureX !== undefined && step.signatureY !== undefined) {
           // Custom position (drag-and-drop) — use % of page
           const percentWidth = step.signatureSize || 12;
           const sigW = (percentWidth / 100) * PAGE_W;
-          const aspect = await getImageAspectRatio(step.signatureData);
+          const aspect = await getImageAspectRatio(cleanSig);
           const sigH = sigW / aspect;
           const sx = (step.signatureX / 100) * PAGE_W;
           const sy = (step.signatureY / 100) * PAGE_H;
-          doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
+          doc.addImage(cleanSig, 'PNG', sx, sy, sigW, sigH);
         } else {
           // Default: inline with approval step row
-          const aspect = await getImageAspectRatio(step.signatureData);
+          const aspect = await getImageAspectRatio(cleanSig);
           const sigW = 30;
           const sigH = sigW / aspect;
-          doc.addImage(step.signatureData, 'PNG', LM + 60, y - 4, sigW, sigH);
+          doc.addImage(cleanSig, 'PNG', LM + 60, y - 4, sigW, sigH);
         }
       } catch (e) {
         console.warn('Failed to embed signature', e);
       }
+    } else {
+      doc.setFont('THSarabun', 'italic');
+      doc.setTextColor(120, 120, 120);
+      doc.text('(อนุมัติโดยข้ามการลงลายเซ็นดิจิทัล)', LM + 60, y + 4.5);
     }
 
     // Draw extra signatures
     if (step.signatureData && step.extraSignaturePositions && step.extraSignaturePositions.length > 0) {
+      const cleanSig = await makeBackgroundTransparent(step.signatureData);
       const percentWidth = step.signatureSize || 12;
       const sigW = (percentWidth / 100) * PAGE_W;
-      const aspect = await getImageAspectRatio(step.signatureData);
+      const aspect = await getImageAspectRatio(cleanSig);
       const sigH = sigW / aspect;
 
       for (const pos of step.extraSignaturePositions) {
         try {
           const sx = (pos.x / 100) * PAGE_W;
           const sy = (pos.y / 100) * PAGE_H;
-          doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
+          doc.addImage(cleanSig, 'PNG', sx, sy, sigW, sigH);
         } catch (e) {
           console.warn('Failed to embed extra signature', e);
         }
@@ -292,7 +299,7 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
       try {
         const tx = (step.textBlockX / 100) * PAGE_W;
         const ty = (step.textBlockY / 100) * PAGE_H;
-        const fontSize = (step.textBlockSize || 13) * 0.85;
+        const fontSize = (step.textBlockSize || 10) * 0.85;
         
         doc.setFontSize(fontSize);
         doc.setFont('THSarabun', 'bold');
@@ -309,7 +316,7 @@ export async function generateApprovalPDF(submission: Submission, asBlobUrl: boo
         try {
           const tx = (tb.x / 100) * PAGE_W;
           const ty = (tb.y / 100) * PAGE_H;
-          const fontSize = (tb.size || 13) * 0.85;
+          const fontSize = (tb.size || 10) * 0.85;
           doc.setFontSize(fontSize);
           doc.setFont('THSarabun', 'bold');
           doc.setTextColor(30, 30, 30);
@@ -428,36 +435,85 @@ function getImageAspectRatio(base64Data: string): Promise<number> {
   });
 }
 
+function makeBackgroundTransparent(base64DataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (!base64DataUrl || !base64DataUrl.startsWith('data:image')) {
+      resolve(base64DataUrl);
+      return;
+    }
+    const img = new Image();
+    img.src = base64DataUrl;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(base64DataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+        
+        // Calculate brightness (luminance)
+        const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (brightness > 190) {
+          // Smooth transparency transition
+          const alphaFactor = Math.max(0, 1 - (brightness - 190) / (240 - 190));
+          data[i + 3] = Math.round(a * alphaFactor);
+        }
+      }
+      
+      ctx.putImageData(imgData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => {
+      resolve(base64DataUrl);
+    };
+  });
+}
+
 /**
  * Helper to draw signatures, extra signatures, text blocks, date blocks, and checkmarks on a jsPDF page.
  */
-async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
-  console.log('[DEBUG] drawSignaturesAndTexts for submission:', submission.id);
+async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission, pageNum: number) {
+  console.log('[DEBUG] drawSignaturesAndTexts for submission:', submission.id, 'pageNum:', pageNum);
   for (const step of submission.approvalSteps) {
+    const stepPage = step.page || 1;
+    if (stepPage !== pageNum) continue;
     console.log(`[DEBUG] Step level ${step.level}: signatureX=${step.signatureX}, signatureY=${step.signatureY}, size=${step.signatureSize}, checkmarkX=${step.checkmarkX}, checkmarkY=${step.checkmarkY}`);
     // Signatures
     if (step.signatureData && step.signatureX !== undefined && step.signatureY !== undefined) {
+      const cleanSig = await makeBackgroundTransparent(step.signatureData);
       const percentWidth = step.signatureSize || 12;
       const sigW = (percentWidth / 100) * 210;
-      const aspect = await getImageAspectRatio(step.signatureData);
+      const aspect = await getImageAspectRatio(cleanSig);
       const sigH = sigW / aspect;
       const sx = (step.signatureX / 100) * 210;
       const sy = (step.signatureY / 100) * 297; // exact drag position
-      doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
+      doc.addImage(cleanSig, 'PNG', sx, sy, sigW, sigH);
     }
 
     // Extra signatures
     if (step.signatureData && step.extraSignaturePositions && step.extraSignaturePositions.length > 0) {
+      const cleanSig = await makeBackgroundTransparent(step.signatureData);
       const percentWidth = step.signatureSize || 12;
       const sigW = (percentWidth / 100) * 210;
-      const aspect = await getImageAspectRatio(step.signatureData);
+      const aspect = await getImageAspectRatio(cleanSig);
       const sigH = sigW / aspect;
 
       for (const pos of step.extraSignaturePositions) {
         const sx = (pos.x / 100) * 210;
         const sy = (pos.y / 100) * 297; // exact drag position
         try {
-          doc.addImage(step.signatureData, 'PNG', sx, sy, sigW, sigH);
+          doc.addImage(cleanSig, 'PNG', sx, sy, sigW, sigH);
         } catch (err) {
           console.warn('Failed to embed extra signature on attachment', err);
         }
@@ -468,7 +524,7 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
     if (step.textBlock && step.textBlockX !== undefined && step.textBlockY !== undefined) {
       const tx = (step.textBlockX / 100) * 210;
       const ty = (step.textBlockY / 100) * 297;
-      const fontSize = (step.textBlockSize || 13) * 0.85;
+      const fontSize = (step.textBlockSize || 10) * 0.85;
       doc.setFontSize(fontSize);
       doc.setFont('THSarabun', 'bold');
       doc.setTextColor(30, 30, 30);
@@ -480,7 +536,7 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
       step.extraTextBlocks.forEach(tb => {
         const tx = (tb.x / 100) * 210;
         const ty = (tb.y / 100) * 297;
-        const fontSize = (tb.size || 13) * 0.85;
+        const fontSize = (tb.size || 10) * 0.85;
         try {
           doc.setFontSize(fontSize);
           doc.setFont('THSarabun', 'bold');
@@ -496,7 +552,7 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission) {
     if (step.dateBlock && step.dateX !== undefined && step.dateY !== undefined) {
       const dx = (step.dateX / 100) * 210;
       const dy = (step.dateY / 100) * 297;
-      const fontSize = step.dateSize || 11;
+      const fontSize = (step.dateSize || 10) * 0.85;
       doc.setFontSize(fontSize);
       doc.setFont('THSarabun', 'bold');
       doc.setTextColor(30, 30, 30);
@@ -546,15 +602,13 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
   if (isImage) {
     let imgDataUrl = sourceUrl;
     if (!sourceUrl.startsWith('blob:') && !sourceUrl.startsWith('data:')) {
-      const res = await fetch(sourceUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const blob = await getCachedFileBlob(sourceUrl);
       imgDataUrl = URL.createObjectURL(blob);
     }
     const isPng = fnLower.endsWith('.png') || sourceUrlLower.endsWith('.png') || sourceUrlLower.includes('.png?');
     const format = isPng ? 'PNG' : 'JPEG';
     doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
-    await drawSignaturesAndTexts(doc, submission);
+    await drawSignaturesAndTexts(doc, submission, 1);
     if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
   } else {
     const pdfjsLib = await import('pdfjs-dist');
@@ -564,9 +618,8 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
       const res = await fetch(sourceUrl);
       pdfData = await res.arrayBuffer();
     } else {
-      const res = await fetch(sourceUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      pdfData = await res.arrayBuffer();
+      const blob = await getCachedFileBlob(sourceUrl);
+      pdfData = await blob.arrayBuffer();
     }
     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -578,7 +631,7 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
       canvas.height = viewport.height;
       await page.render({ canvasContext: canvas.getContext('2d')!, viewport } as any).promise;
       doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
-      await drawSignaturesAndTexts(doc, submission);
+      await drawSignaturesAndTexts(doc, submission, i);
     }
   }
 
@@ -610,9 +663,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
       // Fetch image bytes to avoid CORS
       let imgDataUrl = sourceUrl;
       if (!sourceUrl.startsWith('blob:') && !sourceUrl.startsWith('data:')) {
-        const res = await fetch(sourceUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
+        const blob = await getCachedFileBlob(sourceUrl);
         imgDataUrl = URL.createObjectURL(blob);
       }
 
@@ -622,7 +673,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
       doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
 
       // Superimpose signatures & text blocks
-      await drawSignaturesAndTexts(doc, submission);
+      await drawSignaturesAndTexts(doc, submission, 1);
 
       if (imgDataUrl.startsWith('blob:')) {
         URL.revokeObjectURL(imgDataUrl);
@@ -640,9 +691,8 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
         const res = await fetch(sourceUrl);
         pdfData = await res.arrayBuffer();
       } else {
-        const res = await fetch(sourceUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        pdfData = await res.arrayBuffer();
+        const blob = await getCachedFileBlob(sourceUrl);
+        pdfData = await blob.arrayBuffer();
       }
 
       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
@@ -668,7 +718,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
         doc.addImage(pageImgData, 'JPEG', 0, 0, 210, 297);
 
         // Superimpose signatures & text blocks
-        await drawSignaturesAndTexts(doc, submission);
+        await drawSignaturesAndTexts(doc, submission, i);
       }
     }
 
@@ -710,15 +760,13 @@ export async function generateAdjustedPDFBlob(
   if (isImage) {
     let imgDataUrl = attachmentUrl;
     if (!attachmentUrl.startsWith('blob:') && !attachmentUrl.startsWith('data:')) {
-      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const blob = await getCachedFileBlob(attachmentUrl);
       imgDataUrl = URL.createObjectURL(blob);
     }
     const isPng = fnLower.endsWith('.png') || urlLower.endsWith('.png') || urlLower.includes('.png?');
     const format = isPng ? 'PNG' : 'JPEG';
     doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
-    await drawSignaturesAndTexts(doc, submission);
+    await drawSignaturesAndTexts(doc, submission, 1);
     if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
   } else {
     const pdfjsLib = await import('pdfjs-dist');
@@ -732,9 +780,8 @@ export async function generateAdjustedPDFBlob(
       const res = await fetch(attachmentUrl);
       pdfData = await res.arrayBuffer();
     } else {
-      const res = await fetch(attachmentUrl, { method: 'GET', mode: 'cors', credentials: 'omit' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      pdfData = await res.arrayBuffer();
+      const blob = await getCachedFileBlob(attachmentUrl);
+      pdfData = await blob.arrayBuffer();
     }
 
     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
@@ -747,7 +794,7 @@ export async function generateAdjustedPDFBlob(
       canvas.height = viewport.height;
       await page.render({ canvasContext: canvas.getContext('2d')!, viewport } as any).promise;
       doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
-      await drawSignaturesAndTexts(doc, submission);
+      await drawSignaturesAndTexts(doc, submission, i);
     }
   }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSubmissions } from '../../context/SubmissionsContext';
 import { StatusBadge } from '../shared/StatusBadge';
@@ -11,6 +11,40 @@ import {
   RotateCcw, Paperclip, RefreshCw, Info, Download, Award,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+function AttachmentLink({ file }: { file: { name: string; url: string; size?: string } }) {
+  const [resolvedUrl, setResolvedUrl] = useState(file.url);
+
+  useEffect(() => {
+    let active = true;
+    import('../../lib/fileCache').then(({ getCachedFileUrl }) => {
+      if (active) {
+        getCachedFileUrl(file.url)
+          .then((cached) => {
+            if (active) setResolvedUrl(cached);
+          })
+          .catch((err) => {
+            console.error('Failed to get cached file url:', err);
+          });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [file.url]);
+
+  return (
+    <a
+      href={resolvedUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 text-xs text-[#1a5c2e] hover:underline font-medium"
+    >
+      <Paperclip size={12} />
+      {file.name} {file.size ? `(${file.size})` : ''}
+    </a>
+  );
+}
 
 // ── Approval Timeline (enhanced) ──────────────────────────────
 function ApprovalTimeline({ submission }: { submission: Submission }) {
@@ -342,16 +376,7 @@ function SubmissionCard({ sub }: { sub: Submission }) {
               <p className="text-xs font-medium text-gray-600 mb-2">เอกสารแนบ</p>
               <div className="space-y-1.5">
                 {sub.attachments.map((file, i) => (
-                  <a
-                    key={i}
-                    href={file.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs text-[#1a5c2e] hover:underline font-medium"
-                  >
-                    <Paperclip size={12} />
-                    {file.name} ({file.size})
-                  </a>
+                  <AttachmentLink key={i} file={file} />
                 ))}
               </div>
             </div>

@@ -5,6 +5,7 @@ import {
   FileText, ChevronLeft, ChevronRight, Loader2,
 } from 'lucide-react';
 import type { Attachment, ApprovalStep } from '../../data/mockData';
+import { getCachedFileBlob } from '../../lib/fileCache';
 
 // ── Render PDF page to image URL (offscreen canvas) ──────────
 // Fetches the PDF as bytes first (avoids pdf.js CORS XHR issue),
@@ -33,9 +34,7 @@ function usePdfPageImage(url: string | null, pageNum: number, fileName?: string)
         if (isImage) {
           let finalUrl = url;
           if (!url.startsWith('blob:') && !url.startsWith('data:')) {
-            const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const blob = await res.blob();
+            const blob = await getCachedFileBlob(url);
             finalUrl = URL.createObjectURL(blob);
             createdBlobUrl = finalUrl;
           }
@@ -66,10 +65,9 @@ function usePdfPageImage(url: string | null, pageNum: number, fileName?: string)
           const res = await fetch(url);
           pdfData = await res.arrayBuffer();
         } else {
-          // External URL (Supabase Storage, etc.) — fetch with cors mode
-          const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          pdfData = await res.arrayBuffer();
+          // External URL (Supabase Storage, etc.) — fetch with cache
+          const blob = await getCachedFileBlob(url);
+          pdfData = await blob.arrayBuffer();
         }
 
         if (cancelled) return;
@@ -126,7 +124,7 @@ interface SignatureAndPlaceModalProps {
   initialSignature?: string;
   currentLevel?: number;              // ระดับขั้นตอนการอนุมัติปัจจุบัน
   onConfirm: (
-    signatureData: string,
+    signatureData: string | undefined,
     posX: number,
     posY: number,
     textBlock?: string,
@@ -142,7 +140,8 @@ interface SignatureAndPlaceModalProps {
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
     extraSignaturePositions?: Array<{ x: number; y: number }>,
-    signatureSize?: number
+    signatureSize?: number,
+    page?: number
   ) => void;
   onCancel: () => void;
 }
@@ -212,7 +211,7 @@ export function SignatureAndPlaceModal({
   // Text block states — multiple draggable text annotations
   type TextItem = { val: string; pos: { x: number; y: number }; size: number };
   const [textItems, setTextItems] = useState<TextItem[]>(() => [
-    { val: '', pos: defaults.text, size: 14 },
+    { val: '', pos: defaults.text, size: 10 },
   ]);
 
   // Date block helper & states
@@ -228,7 +227,7 @@ export function SignatureAndPlaceModal({
   const [dateSep, setDateSep] = useState<'/' | '-' | ' ' | 'custom'>('/');
   const [dateVal, setDateVal] = useState(getThaiDateString('/'));
   const [datePos, setDatePos] = useState(() => defaults.date);
-  const [dateSize, setDateSize] = useState(11);
+  const [dateSize, setDateSize] = useState(10);
 
   // Checkmark states
   const [useCheckmark, setUseCheckmark] = useState(false);
@@ -255,7 +254,10 @@ export function SignatureAndPlaceModal({
   ];
 
   const [selectedPdfIdx, setSelectedPdfIdx] = useState(0);
-  const [pdfPage, setPdfPage] = useState(1);
+  const [pdfPage, setPdfPage] = useState(() => {
+    // Default to page 2 if officer/dean level >= 3, otherwise page 1
+    return level >= 3 ? 2 : 1;
+  });
 
   const selectedPdf = pdfOptions[selectedPdfIdx] ?? null;
 
@@ -564,7 +566,7 @@ export function SignatureAndPlaceModal({
                     <div className="flex items-center justify-between">
                       <label className="block text-[10px] font-semibold text-gray-600">✍️ ข้อความบนเอกสาร:</label>
                       <button
-                        onClick={() => setTextItems(prev => [...prev, { val: '', pos: { x: defaults.text.x, y: defaults.text.y + prev.length * 6 }, size: 14 }])}
+                        onClick={() => setTextItems(prev => [...prev, { val: '', pos: { x: defaults.text.x, y: defaults.text.y + prev.length * 6 }, size: 10 }])}
                         className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-green-50 border border-green-300 text-green-700 rounded hover:bg-green-100 transition-colors"
                       >
                         + เพิ่มข้อความ
@@ -743,9 +745,12 @@ export function SignatureAndPlaceModal({
                   )}
 
                   {/* ── Overlay Existing Signatures & Text Blocks ── */}
-                  {(pdfImageUrl || !selectedPdf) && existingSteps && existingSteps.map((step) => (
-                    <React.Fragment key={step.level}>
-                      {step.signatureData && step.signatureX !== undefined && step.signatureY !== undefined && (
+                  {(pdfImageUrl || !selectedPdf) && existingSteps && existingSteps.map((step) => {
+                    const stepPage = step.page || 1;
+                    if (stepPage !== pdfPage) return null;
+                    return (
+                      <React.Fragment key={step.level}>
+                        {step.signatureData && step.signatureX !== undefined && step.signatureY !== undefined && (
                         <img
                           src={step.signatureData}
                           alt={`ลายเซ็น ระดับ ${step.level}`}
@@ -781,7 +786,7 @@ export function SignatureAndPlaceModal({
                           style={{
                             left: `${step.textBlockX}%`,
                             top: `${step.textBlockY}%`,
-                            fontSize: `${step.textBlockSize || 13}px`,
+                            fontSize: `${step.textBlockSize || 10}px`,
                             fontFamily: 'THSarabun, sans-serif',
                             background: 'transparent',
                             lineHeight: 1,
@@ -798,7 +803,7 @@ export function SignatureAndPlaceModal({
                           style={{
                             left: `${eb.x}%`,
                             top: `${eb.y}%`,
-                            fontSize: `${eb.size || 13}px`,
+                            fontSize: `${eb.size || 10}px`,
                             fontFamily: 'THSarabun, sans-serif',
                             background: 'transparent',
                             lineHeight: 1,
@@ -813,7 +818,7 @@ export function SignatureAndPlaceModal({
                           style={{
                             left: `${step.dateX}%`,
                             top: `${step.dateY}%`,
-                            fontSize: `${step.dateSize || 11}px`,
+                            fontSize: `${step.dateSize || 10}px`,
                             fontFamily: 'THSarabun, sans-serif',
                             background: 'transparent',
                             lineHeight: 1,
@@ -836,7 +841,8 @@ export function SignatureAndPlaceModal({
                         </div>
                       )}
                     </React.Fragment>
-                  ))}
+                    );
+                  })}
 
                   {/* Draggable Signatures — one per sigPosition */}
                   {(pdfImageUrl || !selectedPdf) && sigPositions.map((sp, idx) => (
@@ -956,6 +962,21 @@ export function SignatureAndPlaceModal({
             </button>
           )}
           <button
+            type="button"
+            onClick={() => {
+              if (confirm('คุณต้องการอนุมัติคำร้องนี้โดยข้ามการลงลายเซ็นดิจิทัลใช่หรือไม่? (ใช้กรณีที่นิสิตลงนามจริงบนเอกสารแล้ว)')) {
+                onConfirm(
+                  undefined,
+                  0,
+                  0
+                );
+              }
+            }}
+            className="px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-medium transition-colors cursor-pointer shrink-0"
+          >
+            ข้ามการลงลายเซ็น
+          </button>
+          <button
             onClick={() => {
               if (!signatureData) return;
               // First text item → textBlock params (backward compat)
@@ -982,7 +1003,8 @@ export function SignatureAndPlaceModal({
                 useDate ? dateSize : undefined,
                 extras.length > 0 ? extras.map(it => ({ val: it.val, x: it.pos.x, y: it.pos.y, size: it.size })) : undefined,
                 extraSigPos,
-                sigSize
+                sigSize,
+                pdfPage
               );
             }}
             disabled={!signatureData || tab !== 'place'}

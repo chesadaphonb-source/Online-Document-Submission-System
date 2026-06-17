@@ -33,7 +33,8 @@ interface SubmissionsContextType {
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
     extraSignaturePositions?: Array<{ x: number; y: number }>,
-    signatureSize?: number
+    signatureSize?: number,
+    page?: number
   ) => void;
   rejectStep: (submissionId: string, level: number, approverId: string, approverName: string, comment: string) => void;
   adminReceive: (submissionId: string, adminId: string, adminName: string) => void;
@@ -77,6 +78,7 @@ function rowToSubmission(row: any): Submission {
     approvalSteps: row.approval_steps || [],
     attachments: row.attachments || [],
     receivedByAdminAt: row.received_by_admin_at,
+    receivedByAdminName: row.received_by_admin_name,
     adminNote: row.admin_note,
     closedAt: row.closed_at,
     referenceNumber: row.reference_number,
@@ -114,6 +116,7 @@ function submissionToRow(sub: Submission) {
     approval_steps: sub.approvalSteps || [],
     attachments: sub.attachments || [],
     received_by_admin_at: sub.receivedByAdminAt || null,
+    received_by_admin_name: sub.receivedByAdminName || null,
     admin_note: sub.adminNote || null,
     closed_at: sub.closedAt || null,
     reference_number: sub.referenceNumber || null,
@@ -140,6 +143,7 @@ async function dbUpdate(id: string, changes: Partial<Submission>) {
   if (changes.attachments !== undefined) row.attachments = changes.attachments;
   if (changes.currentApprovalLevel !== undefined) row.current_approval_level = changes.currentApprovalLevel;
   if (changes.receivedByAdminAt !== undefined) row.received_by_admin_at = changes.receivedByAdminAt;
+  if (changes.receivedByAdminName !== undefined) row.received_by_admin_name = changes.receivedByAdminName;
   if (changes.adminNote !== undefined) row.admin_note = changes.adminNote;
   if (changes.closedAt !== undefined) row.closed_at = changes.closedAt;
   if (changes.referenceNumber !== undefined) row.reference_number = changes.referenceNumber;
@@ -246,7 +250,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
   // ── Admin รับเรื่อง ────────────────────────────────────────
   const adminReceive = useCallback((submissionId: string, adminId: string, adminName: string) => {
     const now = new Date().toISOString();
-    updateSubmission(submissionId, { status: 'admin_reviewing', receivedByAdminAt: now });
+    updateSubmission(submissionId, { status: 'admin_reviewing', receivedByAdminAt: now, receivedByAdminName: adminName });
     const sub = submissions.find(s => s.id === submissionId);
     if (!sub) return;
     addNotification({
@@ -275,6 +279,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
       currentApprovalLevel: 1,
       approvalSteps: stepsToUse,
       receivedByAdminAt: sub.receivedByAdminAt || now,
+      receivedByAdminName: adminName,
       ...(deadline ? { deadline, deadlineSetBy: adminId, deadlineSetAt: now } : {}),
     });
     const notifs: Omit<Notification, 'id' | 'createdAt' | 'isRead'>[] = [];
@@ -334,7 +339,8 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
     dateSize?: number,
     extraTextBlocks?: Array<{ val: string; x: number; y: number; size: number }>,
     extraSignaturePositions?: Array<{ x: number; y: number }>,
-    signatureSize?: number
+    signatureSize?: number,
+    page?: number
   ) => {
     const sub = submissions.find(s => s.id === submissionId);
     if (!sub) return;
@@ -365,6 +371,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
             checkmarkY,
             dateSize,
             extraTextBlocks,
+            page,
           }
         : step
     );
@@ -594,7 +601,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
       submissionId, submissionName: sub.formName,
       type: 'completed',
       title: 'เจ้าหน้าที่ตรวจสอบเรียบร้อยแล้ว ✅',
-      message: `${sub.formName} สำเร็จสมบูรณ์ เลขที่อ้างอิง: ${refNum}`,
+      message: `${sub.formName} สำเร็จสมบูรณ์ เลขที่อ้างอิง: ${refNum}${note ? `\nหมายเหตุ: ${note}` : ''}`,
       actionUrl: '/student/track',
       studentName: sub.studentName,
       studentEmail: sub.studentEmail,

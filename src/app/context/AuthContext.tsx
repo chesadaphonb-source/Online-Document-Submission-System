@@ -10,6 +10,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isLoading: boolean;
   mode: 'supabase' | 'mock';
+  updateCurrentUserProfile: (updatedData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -195,9 +196,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUser(null);
   };
 
+  const updateCurrentUserProfile = (updatedData: Partial<User>) => {
+    setCurrentUser(prev => {
+      if (!prev) return null;
+      const newProfile = { ...prev, ...updatedData };
+      localStorage.setItem('ku_paper_user_profile', JSON.stringify(newProfile));
+      return newProfile;
+    });
+  };
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, loginAsStudent, logout, isLoading, mode }}>
+    <AuthContext.Provider value={{ currentUser, login, loginAsStudent, logout, isLoading, mode, updateCurrentUserProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,6 +3,7 @@ import { Move, Check, X, Loader2, Plus, Calendar, Type } from 'lucide-react';
 import type { Submission, ApprovalStep } from '../../data/mockData';
 import { toast } from 'sonner';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { getCachedFileBlob } from '../../lib/fileCache';
 
 // Helper to generate Thai Buddhist Era date string
 function getThaiDateString(sep = '/') {
@@ -38,9 +39,7 @@ function usePdfPageImage(url: string | null, pageNum: number, fileName?: string)
         if (isImage) {
           let finalUrl = url;
           if (!url.startsWith('blob:') && !url.startsWith('data:')) {
-            const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const blob = await res.blob();
+            const blob = await getCachedFileBlob(url);
             finalUrl = URL.createObjectURL(blob);
             createdBlobUrl = finalUrl;
           }
@@ -68,9 +67,8 @@ function usePdfPageImage(url: string | null, pageNum: number, fileName?: string)
           const res = await fetch(url);
           pdfData = await res.arrayBuffer();
         } else {
-          const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          pdfData = await res.arrayBuffer();
+          const blob = await getCachedFileBlob(url);
+          pdfData = await blob.arrayBuffer();
         }
 
         if (cancelled) return;
@@ -386,7 +384,7 @@ export function AdminAdjustSignaturesModal({
     setSteps(prev => prev.map(s => {
       if (s.level !== level) return s;
       const name = s.approverName || s.roleName || '';
-      return { ...s, textBlock: name, textBlockX: (s.signatureX ?? 30), textBlockY: (s.signatureY ?? 65) + 5, textBlockSize: 12 };
+      return { ...s, textBlock: name, textBlockX: (s.signatureX ?? 30), textBlockY: (s.signatureY ?? 65) + 5, textBlockSize: 10 };
     }));
   };
 
@@ -394,7 +392,7 @@ export function AdminAdjustSignaturesModal({
   const handleAddDateBlock = (level: number) => {
     setSteps(prev => prev.map(s => {
       if (s.level !== level) return s;
-      return { ...s, dateBlock: getThaiDateString('/'), dateX: (s.signatureX ?? 30), dateY: (s.signatureY ?? 65) + 8, dateSize: 11 };
+      return { ...s, dateBlock: getThaiDateString('/'), dateX: (s.signatureX ?? 30), dateY: (s.signatureY ?? 65) + 8, dateSize: 10 };
     }));
   };
 
@@ -482,7 +480,7 @@ export function AdminAdjustSignaturesModal({
       const extraSigPos = s.extraSignaturePositions?.[extras.length];
       const baseX = extraSigPos?.x ?? (s.signatureX ?? 60);
       const baseY = extraSigPos?.y ?? (s.signatureY ?? 65);
-      extras.push({ val: s.approverName || '', x: baseX, y: baseY + 5, size: 11 });
+      extras.push({ val: s.approverName || '', x: baseX, y: baseY + 5, size: 10 });
       return { ...s, extraTextBlocks: extras };
     }));
   };
@@ -579,6 +577,24 @@ export function AdminAdjustSignaturesModal({
                         {step.approverName || step.roleName}
                       </span>
                     </div>
+
+                    {numPages > 1 && (
+                      <div className="flex items-center justify-between text-[11px] border-t border-gray-100 pt-1.5 mt-1">
+                        <span className="text-gray-400 font-medium">แสตมป์ลงบนหน้า:</span>
+                        <select
+                          value={step.page || 1}
+                          onChange={e => {
+                            const val = Number(e.target.value);
+                            setSteps(prev => prev.map(s => s.level === step.level ? { ...s, page: val } : s));
+                          }}
+                          className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 bg-white font-semibold text-gray-700 focus:outline-none focus:border-[#1a5c2e]"
+                        >
+                          {Array.from({ length: numPages }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>หน้า {i + 1}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     
                     <div className="space-y-3">
                       {/* Signature size slider */}
@@ -693,13 +709,13 @@ export function AdminAdjustSignaturesModal({
                             />
                             <div className="flex items-center justify-between text-xs text-gray-500">
                               <span>ขนาดข้อความ</span>
-                              <span className="font-semibold text-gray-700">{step.textBlockSize || 12}px</span>
+                              <span className="font-semibold text-gray-700">{step.textBlockSize || 10}px</span>
                             </div>
                             <input
                               type="range"
                               min={8}
                               max={24}
-                              value={step.textBlockSize || 12}
+                              value={step.textBlockSize || 10}
                               onChange={e => handleTextBlockSizeChange(step.level, Number(e.target.value))}
                               className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
@@ -731,13 +747,13 @@ export function AdminAdjustSignaturesModal({
                             />
                             <div className="flex items-center justify-between text-xs text-gray-500">
                               <span>ขนาดวันที่</span>
-                              <span className="font-semibold text-gray-700">{step.dateSize || 11}px</span>
+                              <span className="font-semibold text-gray-700">{step.dateSize || 10}px</span>
                             </div>
                             <input
                               type="range"
                               min={6}
                               max={30}
-                              value={step.dateSize || 11}
+                              value={step.dateSize || 10}
                               onChange={e => handleDateSizeChange(step.level, Number(e.target.value))}
                               className="w-full accent-[#1a5c2e] h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
@@ -895,6 +911,8 @@ export function AdminAdjustSignaturesModal({
 
               {/* Draggable signatures and text overlays */}
               {!pdfLoading && imageUrl && steps.map((step, idx) => {
+                const stepPage = step.page || 1;
+                if (stepPage !== pageNum) return null;
                 const colorIdx = idx % borderColors.length;
                 const sigSize = step.signatureSize || 12;
                 const borderHex = step.level === 1 ? 'border-blue-500' : step.level === 2 ? 'border-emerald-500' : 'border-purple-500';
@@ -966,7 +984,7 @@ export function AdminAdjustSignaturesModal({
                         style={{
                           left: `${step.dateX}%`,
                           top: `${step.dateY}%`,
-                          fontSize: `${step.dateSize || 11}px`,
+                          fontSize: `${step.dateSize || 10}px`,
                           fontFamily: 'THSarabun, sans-serif',
                           lineHeight: 1,
                           touchAction: 'none'
@@ -985,7 +1003,7 @@ export function AdminAdjustSignaturesModal({
                         style={{
                           left: `${step.textBlockX}%`,
                           top: `${step.textBlockY}%`,
-                          fontSize: `${step.textBlockSize || 12}px`,
+                          fontSize: `${step.textBlockSize || 10}px`,
                           fontFamily: 'THSarabun, sans-serif',
                           lineHeight: 1,
                           touchAction: 'none'

@@ -9,7 +9,7 @@ import { formatMoney } from '../../lib/exportUtils';
 import {
   Inbox, CheckCircle, XCircle, FileText, ChevronDown, ChevronUp,
   User, Calendar, AlertCircle, Send, RotateCcw, Clock, Paperclip,
-  Lock, Edit3, Check, Search, UserCheck, Download, PenLine, X, Maximize2, ExternalLink,
+  Lock, Edit3, Check, Search, UserCheck, Download, PenLine, X, Maximize2, ExternalLink, Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateSignedAttachmentPDF, previewSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
@@ -69,6 +69,8 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
   const [signedPreviewOpen, setSignedPreviewOpen] = useState(false);
   const [signedPreviewUrl, setSignedPreviewUrl] = useState<string | null>(null);
   const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
+  const [showCloseForm, setShowCloseForm] = useState(false);
+  const [closeNote, setCloseNote] = useState('โปรดดาวน์โหลดเอกสารจากระบบนี้ แล้วนำไปดำเนินการยื่นส่งต่อให้ สบศ. (สำนักบริหารการศึกษา) ด้วยตนเองเพื่อเสร็จสิ้นขั้นตอนต่อไป');
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -146,8 +148,9 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
   };
 
   const handleClose = () => {
-    adminClose(sub.id, adminId, adminName);
+    adminClose(sub.id, adminId, adminName, closeNote);
     toast.success('ปิดงานเรียบร้อย ออกเลขที่แล้ว');
+    setShowCloseForm(false);
   };
 
   const handleSaveEdit = () => {
@@ -192,6 +195,11 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
                 <span className="text-xs text-gray-400 flex items-center gap-1"><Calendar size={11} /> {formatDateTime(sub.submittedAt)}</span>
                 {hasAttachments && <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full flex items-center gap-1"><Paperclip size={9} /> {sub.attachments!.length} ไฟล์</span>}
                 {(sub.revisionCount ?? 0) > 0 && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">ยื่นซ้ำ ครั้งที่ {sub.revisionCount}</span>}
+                {sub.receivedByAdminName && (
+                  <span className="text-xs bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Shield size={10} className="text-purple-600" /> รับเรื่องโดย: {sub.receivedByAdminName}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -263,7 +271,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
               <button onClick={() => setEditMode(!editMode)} className="flex items-center gap-1.5 text-xs text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-all">
                 <Edit3 size={13} /> {editMode ? 'ยกเลิกแก้ไข' : 'แก้ไขข้อมูล'}
               </button>
-              <button onClick={handleClose} className="flex items-center gap-1.5 text-xs text-white bg-green-600 hover:bg-green-700 px-4 py-1.5 rounded-lg transition-all">
+              <button onClick={() => setShowCloseForm(!showCloseForm)} className={`flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-lg transition-all ${showCloseForm ? 'text-gray-500 bg-gray-50' : 'text-white bg-green-600 hover:bg-green-700'}`}>
                 <Lock size={13} /> ปิดงาน / ออกเลขที่
               </button>
             </>
@@ -430,6 +438,28 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
             </div>
             <button onClick={handleReturn} className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs transition-all">
               <RotateCcw size={13} /> ส่งกลับพิจารณา
+            </button>
+          </div>
+        )}
+
+        {/* Close task note form */}
+        {showCloseForm && mode === 'pending_close' && (
+          <div className="px-4 pb-4 border-t border-green-100 pt-3 space-y-2 bg-green-50/20">
+            <p className="text-xs text-green-800 font-semibold flex items-center gap-1.5">
+              <Lock size={13} /> ระบุคำแนะนำ/หมายเหตุแจ้งนิสิตก่อนปิดงาน
+            </p>
+            <p className="text-[10px] text-gray-500">
+              ระบุเอกสารที่นิสิตต้องนำไปส่ง สบศ. ต่อ หรือข้อมูลอื่นๆ เพื่อส่งการแจ้งเตือนและบันทึกแสดงที่หน้าติดตามสถานะของนิสิต
+            </p>
+            <textarea
+              rows={3}
+              value={closeNote}
+              onChange={e => setCloseNote(e.target.value)}
+              placeholder="ระบุคำแนะนำ (เช่น โปรดดาวน์โหลดใบคำร้องสีขาวไปยื่น สบศ. ประตู 1)"
+              className="w-full px-3 py-2 border border-green-200 rounded-lg text-xs focus:outline-none focus:border-green-400 resize-none bg-white text-gray-850"
+            />
+            <button onClick={handleClose} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs transition-all font-semibold cursor-pointer">
+              <Check size={13} /> ยืนยันปิดงานและแจ้งเตือนนิสิต
             </button>
           </div>
         )}

@@ -120,6 +120,7 @@ export interface ApprovalStep {
   previousApproverName?: string;
   returnedByAdminAt?: string;    // Admin ส่งกลับเมื่อไหร่
   returnReason?: string;         // เหตุผลที่ Admin ส่งกลับ
+  page?: number;                 // หน้าเอกสารที่ลงนาม (1-based)
 }
 
 export interface Attachment {
@@ -152,6 +153,7 @@ export interface Submission {
   // Admin workflow fields
   adminNote?: string;            // หมายเหตุ Admin
   receivedByAdminAt?: string;    // เวลา Admin รับเรื่อง
+  receivedByAdminName?: string;  // ชื่อ Admin ผู้รับ/ส่งเรื่อง
   closedAt?: string;             // เวลา Admin ปิดงาน
   referenceNumber?: string;      // เลขที่ออกตอนปิดงาน
   // Deadline fields

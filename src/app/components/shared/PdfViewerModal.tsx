@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, FileText, ExternalLink, Download, Paperclip, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react';
 import { Attachment, Submission } from '../../data/mockData';
 import { generateSignedAttachmentPDF } from '../../lib/generateApprovalPDF';
+import { getCachedFileUrl } from '../../lib/fileCache';
 
 interface PdfViewerModalProps {
   attachments: Attachment[];
@@ -15,8 +16,31 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  const [cachedUrl, setCachedUrl] = useState<string>('');
 
   const current = attachments[selectedIndex];
+
+  useEffect(() => {
+    let active = true;
+    if (current?.url) {
+      setLoading(true);
+      getCachedFileUrl(current.url)
+        .then((resolvedUrl) => {
+          if (active) {
+            setCachedUrl(resolvedUrl);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load cached URL', err);
+          if (active) {
+            setCachedUrl(current.url);
+          }
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [current?.url]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -34,7 +58,7 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
             <button onClick={() => setFullscreen(!fullscreen)} title={fullscreen ? 'ย่อหน้าต่าง' : 'เต็มหน้าจอ'} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
               <Maximize2 size={16} />
             </button>
-            <a href={current.url} target="_blank" rel="noopener noreferrer" title="เปิดในแท็บใหม่" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+            <a href={cachedUrl || current.url} target="_blank" rel="noopener noreferrer" title="เปิดในแท็บใหม่" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
               <ExternalLink size={16} />
             </a>
             <button onClick={onClose} className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors">
@@ -87,12 +111,12 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
                 <span className="text-xs text-gray-400">• {current.size}</span>
               </div>
               <div className="flex gap-2">
-                <a href={current.url} download={current.name} className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 bg-gray-100 px-3 py-1.5 rounded-lg transition-colors">
+                <a href={cachedUrl || current.url} download={current.name} className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 bg-gray-100 px-3 py-1.5 rounded-lg transition-colors">
                   <Download size={13} /> ดาวน์โหลดต้นฉบับ
                 </a>
                 {submission && current.type === 'pdf' && (
                   <button
-                    onClick={() => generateSignedAttachmentPDF(submission, current.url, current.name)}
+                    onClick={() => generateSignedAttachmentPDF(submission, cachedUrl || current.url, current.name)}
                     className="flex items-center gap-1.5 text-xs text-green-700 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors"
                   >
                     <Download size={13} /> ดาวน์โหลดพร้อมลายเซ็น
@@ -109,10 +133,12 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
                 </div>
               )}
               <iframe
-                key={current.url}
-                src={`${current.url}#toolbar=1`}
+                key={cachedUrl || current.url}
+                src={cachedUrl ? `${cachedUrl}#toolbar=1` : ''}
                 className="w-full h-full border-0"
-                onLoad={() => setLoading(false)}
+                onLoad={() => {
+                  if (cachedUrl) setLoading(false);
+                }}
                 title={current.name}
               />
             </div>

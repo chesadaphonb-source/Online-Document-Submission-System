@@ -12,7 +12,7 @@ import {
 } from '../../data/mockData';
 import {
   FileText, Search, ChevronDown, ChevronUp, User,
-  Calendar, CheckCircle, Clock, XCircle, AlertCircle, Eye, Paperclip, ShieldCheck,
+  Calendar, CheckCircle, Clock, XCircle, AlertCircle, Eye, Paperclip, ShieldCheck, Shield,
   PenLine, X, ExternalLink, Download, Move
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -138,6 +138,11 @@ function SubmissionRow({ sub }: { sub: Submission }) {
                     <span className="text-xs text-gray-500 flex items-center gap-1"><User size={11} /> {sub.studentName}</span>
                     <span className="text-xs text-gray-400">{sub.department}</span>
                     <span className="text-xs text-gray-400 flex items-center gap-1"><Calendar size={11} /> {formatDateTime(sub.submittedAt)}</span>
+                    {sub.receivedByAdminName && (
+                      <span className="text-xs bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                        <Shield size={9} className="text-purple-600" /> รับเรื่องโดย: {sub.receivedByAdminName}
+                      </span>
+                    )}
                     {hasAttachments && (
                       <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full flex items-center gap-1">
                         <Paperclip size={9} /> {sub.attachments!.length} ไฟล์

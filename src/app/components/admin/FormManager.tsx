@@ -652,7 +652,19 @@ export function FormManager() {
       if (error) {
         toast.error('โหลดข้อมูลไม่สำเร็จ: ' + error.message);
       } else {
-        setForms(data || []);
+        const { getCachedFileUrl } = await import('../../lib/fileCache');
+        const resolved = await Promise.all((data || []).map(async f => {
+          if (f.file_url) {
+            try {
+              const cached = await getCachedFileUrl(f.file_url);
+              return { ...f, file_url: cached };
+            } catch (e) {
+              console.error(e);
+            }
+          }
+          return f;
+        }));
+        setForms(resolved);
       }
     } else {
       setForms([]);

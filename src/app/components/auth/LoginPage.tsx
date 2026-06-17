@@ -52,9 +52,20 @@ export function LoginPage() {
   const doLogin = async () => {
     if (selectedRole?.key === 'student') {
       if (!studentName.trim() || !studentId.trim()) { toast.error('กรุณากรอกชื่อและรหัสนิสิต'); return; }
+
+      const cleanStudentId = studentId.trim();
+      if (cleanStudentId.length === 13) {
+        toast.error('คุณกรอกเลข 13 หลัก ซึ่งน่าจะเป็นเลขบัตรประชาชน กรุณาใช้ "รหัสนิสิต 10 หลัก"');
+        return;
+      }
+      if (cleanStudentId.length !== 10 || isNaN(Number(cleanStudentId))) {
+        toast.error('กรุณากรอกรหัสนิสิต 10 หลัก (เช่น 6510450001)');
+        return;
+      }
+
       if (!studentDept) { toast.error('กรุณาเลือกภาควิชา'); return; }
       if (!studentYear.trim() || isNaN(Number(studentYear)) || Number(studentYear) < 1) { toast.error('กรุณากรอกชั้นปีที่ถูกต้อง'); return; }
-      const result = loginAsStudent(studentName, studentId, studentDept, studentEmail, studentCampus, studentLevel, Number(studentYear));
+      const result = loginAsStudent(studentName, cleanStudentId, studentDept, studentEmail, studentCampus, studentLevel, Number(studentYear));
       toast.success(`ยินดีต้อนรับ, ${result.user.name}`);
       navigate('/student/dashboard'); return;
     }
@@ -267,8 +278,13 @@ export function LoginPage() {
                 <form onSubmit={e => { e.preventDefault(); doLogin(); }} className="space-y-4 flex-1">
                   {activeRole.key === 'student' ? (
                     <>
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700">
-                        ℹ️ นิสิตไม่ต้องตั้งรหัสผ่าน — กรอกชื่อและรหัสนิสิตแล้วเข้าใช้งานได้เลย
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-sm text-blue-700 space-y-1 animate-fade-in">
+                        <p className="font-semibold flex items-center gap-1.5">
+                          ℹ️ นิสิตไม่ต้องตั้งรหัสผ่าน — กรอกชื่อและรหัสนิสิตแล้วเข้าใช้งานได้เลย
+                        </p>
+                        <p className="text-xs text-blue-600 font-medium">
+                          ⚠️ โปรดใช้ <span className="font-bold underline">"รหัสนิสิต 10 หลัก"</span>
+                        </p>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-700 mb-1.5 font-medium">ชื่อ-นามสกุล <span className="text-red-500 ml-1">*</span></label>
@@ -277,10 +293,14 @@ export function LoginPage() {
                           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all"/>
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">รหัสนิสิต <span className="text-red-500 ml-1">*</span></label>
-                        <input type="text" value={studentId} onChange={e => setStudentId(e.target.value)}
-                          placeholder="เช่น 6510000000"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all"/>
+                        <label className="block text-sm text-gray-700 mb-1.5 font-medium">
+                          รหัสนิสิต <span className="text-red-500 ml-1">*</span>
+                          <span className="block text-[11px] text-amber-600 font-medium mt-0.5">⚠️ ใช้รหัสนิสิต 10 หลัก</span>
+                        </label>
+                        <input type="text" value={studentId} onChange={e => setStudentId(e.target.value.replace(/[^0-9]/g, ''))}
+                          placeholder="กรอกรหัสนิสิต 10 หลัก"
+                          maxLength={10}
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all font-mono"/>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-700 mb-1.5 font-medium">วิทยาเขต <span className="text-red-500 ml-1">*</span></label>
