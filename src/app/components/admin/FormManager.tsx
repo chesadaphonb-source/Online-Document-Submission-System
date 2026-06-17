@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured, supabaseStorage } from '../../lib/supabase';
 import {
   FileText, Plus, Upload, Download, Edit2, Trash2,
   Search, Eye, EyeOff, CheckCircle, X, Save, RefreshCw,
@@ -84,7 +84,8 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     setUploading(true);
     try {
       let fileUrl = '';
-      if (isSupabaseConfigured && supabase) {
+      const activeStorage = supabaseStorage || supabase;
+      if (isSupabaseConfigured && activeStorage) {
         // Sanitize file name for Supabase storage path to avoid "Invalid key" errors with Thai/special characters
         const ext = file.name.split('.').pop() || '';
         const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
@@ -92,11 +93,11 @@ function UploadFormModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         const safeBase = cleanBase || 'template';
         const filePath = `${Date.now()}_${safeBase}.${ext}`;
 
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await activeStorage.storage
           .from('forms')
           .upload(filePath, file, { contentType: 'application/pdf', upsert: false });
         if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from('forms').getPublicUrl(filePath);
+        const { data: urlData } = activeStorage.storage.from('forms').getPublicUrl(filePath);
         fileUrl = urlData.publicUrl;
         const { error: dbError } = await supabase.from('forms_library').insert({
           name: name.trim(),

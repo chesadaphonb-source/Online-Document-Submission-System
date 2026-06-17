@@ -13,6 +13,14 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
+// Support separate storage project to divide bandwidth/egress usage
+const STORAGE_URL = ((import.meta as any).env?.VITE_SUPABASE_STORAGE_URL as string) || SUPABASE_URL;
+const STORAGE_ANON_KEY = ((import.meta as any).env?.VITE_SUPABASE_STORAGE_ANON_KEY as string) || SUPABASE_ANON_KEY;
+
+export const supabaseStorage: SupabaseClient | null = isSupabaseConfigured
+  ? createClient(STORAGE_URL, STORAGE_ANON_KEY)
+  : null;
+
 if (!isSupabaseConfigured) {
   console.warn('[KU-Paper] Supabase not configured. Using mock data.');
 }

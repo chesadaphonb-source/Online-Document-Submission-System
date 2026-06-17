@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { useSubmissions } from '../../context/SubmissionsContext';
 import { formTemplates, FormTemplate, mockStudents, Submission, ApprovalStep, Attachment } from '../../data/mockData';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured, supabaseStorage } from '../../lib/supabase';
 import { formatMoney } from '../../lib/exportUtils';
 import {
   ChevronRight, ChevronLeft, Check, FileText, Upload,
@@ -158,7 +158,8 @@ function FormDownloadSection({
 
 // ─── Real File Upload ─────────────────────────────────────────
 async function uploadFileToSupabase(file: File): Promise<{ url: string; name: string; size: string }> {
-  if (!isSupabaseConfigured || !supabase) {
+  const activeStorage = supabaseStorage || supabase;
+  if (!isSupabaseConfigured || !activeStorage) {
     // fallback: object URL (local only)
     return { url: URL.createObjectURL(file), name: file.name, size: formatFileSize(file.size) };
   }
@@ -167,12 +168,12 @@ async function uploadFileToSupabase(file: File): Promise<{ url: string; name: st
   const cleanBase = baseName.replace(/[^a-zA-Z0-9-_]/g, '_').replace(/^_+|_+$/g, '');
   const safeBase = cleanBase || 'document';
   const filePath = `submissions/${Date.now()}_${safeBase}.${ext}`;
-  const { error } = await supabase.storage.from('attachments').upload(filePath, file, {
+  const { error } = await activeStorage.storage.from('attachments').upload(filePath, file, {
     contentType: file.type,
     upsert: false,
   });
   if (error) throw error;
-  const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(filePath);
+  const { data: urlData } = activeStorage.storage.from('attachments').getPublicUrl(filePath);
   return { url: urlData.publicUrl, name: file.name, size: formatFileSize(file.size) };
 }
 

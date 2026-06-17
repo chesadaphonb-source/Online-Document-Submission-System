@@ -3,7 +3,7 @@ import {
   Submission, ApprovalStep, initialSubmissions, SubmissionStatus, mockAdmin, FormTypeId
 } from '../data/mockData';
 import { useNotifications, Notification } from './NotificationContext';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, supabaseStorage } from '../lib/supabase';
 import { generateCertificateHash, generateAdjustedPDFBlob } from '../lib/generateApprovalPDF';
 import { toast } from 'sonner';
 
@@ -820,9 +820,10 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
         const pdfBlob = await generateAdjustedPDFBlob(targetSub, sourceUrl, attach.name);
 
         // Upload to Supabase Storage if configured
-        if (isSupabaseConfigured && supabase) {
+        const activeStorage = supabaseStorage || supabase;
+        if (isSupabaseConfigured && activeStorage) {
           const storagePath = `submissions/${submissionId}/adjusted_${Date.now()}.pdf`;
-          const { error: uploadError } = await supabase.storage
+          const { error: uploadError } = await activeStorage.storage
             .from('attachments')
             .upload(storagePath, pdfBlob, {
               contentType: 'application/pdf',
@@ -836,7 +837,7 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
           }
 
           // Get public URL
-          const { data: urlData } = supabase.storage
+          const { data: urlData } = activeStorage.storage
             .from('attachments')
             .getPublicUrl(storagePath);
 
