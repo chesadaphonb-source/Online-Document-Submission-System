@@ -280,6 +280,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
               <button
                 onClick={() => {
                   setShowReturnForm(!showReturnForm);
+                  setShowRejectForm(false);
                   setShowCloseForm(false);
                   setEditMode(false);
                   if (sub.approvalSteps.length > 0) {
@@ -291,6 +292,19 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
                 }`}
               >
                 <RotateCcw size={13} /> ตีกลับการอนุมัติ
+              </button>
+              <button
+                onClick={() => {
+                  setShowRejectForm(!showRejectForm);
+                  setShowReturnForm(false);
+                  setShowCloseForm(false);
+                  setEditMode(false);
+                }}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all ${
+                  showRejectForm ? 'text-gray-500 bg-gray-50' : 'text-red-600 bg-red-50 hover:bg-red-100'
+                }`}
+              >
+                <XCircle size={13} /> ตีกลับให้นิสิต
               </button>
               <button onClick={() => setShowCloseForm(!showCloseForm)} className={`flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-lg transition-all ${showCloseForm ? 'text-gray-500 bg-gray-50' : 'text-white bg-green-600 hover:bg-green-700'}`}>
                 <Lock size={13} /> ปิดงาน / ออกเลขที่
@@ -435,10 +449,25 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
         {/* Reject form */}
         {showRejectForm && (
           <div className="px-4 pb-4 border-t border-gray-100 pt-3">
-            <p className="text-xs text-gray-700 font-medium mb-2">{mode === 'new' ? 'เหตุผลที่ตีกลับ' : 'เหตุผลที่ยืนยันไม่อนุมัติ'}</p>
-            <textarea rows={2} value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="ระบุเหตุผล (บังคับ)" className="w-full px-3 py-2 border border-red-200 rounded-lg text-xs focus:outline-none focus:border-red-400 resize-none mb-2" />
-            <button onClick={handleAdminReject} className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs transition-all">
-              <XCircle size={13} /> ยืนยัน{mode === 'new' ? 'ตีกลับ' : 'ไม่อนุมัติ'}และแจ้งนิสิต
+            <p className="text-xs text-gray-700 font-semibold mb-2">
+              {mode === 'new' ? 'เหตุผลที่ตีกลับคำร้องให้นิสิต' : mode === 'pending_close' ? 'เหตุผลที่ตีกลับคำร้องให้นิสิต (ปฏิเสธคำร้อง)' : 'เหตุผลที่ยืนยันไม่อนุมัติ'}
+            </p>
+            <textarea
+              rows={2}
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              placeholder="ระบุเหตุผลการตีกลับ/ไม่อนุมัติ เพื่อแจ้งให้นิสิตทราบ (บังคับ)"
+              className="w-full px-3 py-2 border border-red-200 rounded-lg text-xs focus:outline-none focus:border-red-400 resize-none mb-2"
+            />
+            <button
+              onClick={() => {
+                handleAdminReject();
+                setShowRejectForm(false);
+                setRejectReason('');
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs transition-all w-full justify-center"
+            >
+              <XCircle size={13} /> ยืนยันตีกลับคำร้อง (ส่งกลับให้นิสิตแก้ไขใหม่)
             </button>
           </div>
         )}
