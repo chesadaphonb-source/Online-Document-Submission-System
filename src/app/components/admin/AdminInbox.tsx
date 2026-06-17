@@ -56,6 +56,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
   const [rejectReason, setRejectReason] = useState('');
   const [returnReason, setReturnReason] = useState('');
   const [newApproverId, setNewApproverId] = useState('');
+  const [returnToLevel, setReturnToLevel] = useState<number>(1);
   // กำหนดผู้อนุมัติแต่ละระดับ
   const [assignedStep, setAssignedStep] = useState<Record<number, string>>(() => {
     const init: Record<number, string> = {};
@@ -140,11 +141,16 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
   };
   const handleReturn = () => {
     if (!returnReason.trim()) { toast.error('กรุณาระบุเหตุผล'); return; }
-    if (!rejectedStep) return;
+    const targetLvl = mode === 'pending_close' ? returnToLevel : rejectedStep?.level;
+    if (!targetLvl) return;
+    const activeStep = sub.approvalSteps.find(s => s.level === targetLvl);
+    if (!activeStep) return;
     const newTeacher = teachers.find(t => t.id === newApproverId);
-    adminReturnToTeacher(sub.id, rejectedStep.level, returnReason, newApproverId || undefined, newTeacher?.name);
-    toast.success(newApproverId ? 'เปลี่ยนผู้อนุมัติและส่งกลับแล้ว' : 'ส่งกลับอาจารย์แล้ว');
+    adminReturnToTeacher(sub.id, targetLvl, returnReason, newApproverId || undefined, newTeacher?.name);
+    toast.success(newApproverId ? 'เปลี่ยนผู้อนุมัติและส่งกลับพิจารณาใหม่แล้ว' : 'ส่งกลับให้พิจารณาใหม่แล้ว');
     setShowReturnForm(false);
+    setReturnReason('');
+    setNewApproverId('');
   };
 
   const handleClose = () => {
@@ -270,6 +276,21 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
             <>
               <button onClick={() => setEditMode(!editMode)} className="flex items-center gap-1.5 text-xs text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-all">
                 <Edit3 size={13} /> {editMode ? 'ยกเลิกแก้ไข' : 'แก้ไขข้อมูล'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowReturnForm(!showReturnForm);
+                  setShowCloseForm(false);
+                  setEditMode(false);
+                  if (sub.approvalSteps.length > 0) {
+                    setReturnToLevel(sub.approvalSteps[0].level);
+                  }
+                }}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all ${
+                  showReturnForm ? 'text-gray-500 bg-gray-50' : 'text-amber-700 bg-amber-50 hover:bg-amber-100'
+                }`}
+              >
+                <RotateCcw size={13} /> ตีกลับการอนุมัติ
               </button>
               <button onClick={() => setShowCloseForm(!showCloseForm)} className={`flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-lg transition-all ${showCloseForm ? 'text-gray-500 bg-gray-50' : 'text-white bg-green-600 hover:bg-green-700'}`}>
                 <Lock size={13} /> ปิดงาน / ออกเลขที่
@@ -423,21 +444,75 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
         )}
 
         {/* Return to teacher form */}
-        {showReturnForm && rejectedStep && (
-          <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-2">
-            <p className="text-xs text-gray-700 font-medium">ส่งกลับพร้อมเหตุผล / เปลี่ยนผู้อนุมัติ</p>
-            <textarea rows={2} value={returnReason} onChange={e => setReturnReason(e.target.value)} placeholder="เหตุผลที่ส่งกลับ (บังคับ)" className="w-full px-3 py-2 border border-amber-200 rounded-lg text-xs focus:outline-none focus:border-amber-400 resize-none" />
+        {showReturnForm && (rejectedStep || mode === 'pending_close') && (
+          <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
+            <p className="text-xs text-gray-700 font-bold flex items-center gap-1">
+              <RotateCcw size={13} className="text-amber-600" />
+              {mode === 'pending_close' ? 'ตีกลับการอนุมัติเพื่อส่งให้พิจารณาใหม่' : 'ส่งกลับให้พิจารณาใหม่'}
+            </p>
+
+            {mode === 'pending_close' && (
+              <div>
+                <label className="text-[11px] text-gray-500 font-semibold mb-1 block">ขั้นตอนที่ต้องการส่งกลับไปแก้ไข:</label>
+                <select
+                  value={returnToLevel}
+                  onChange={e => {
+                    setReturnToLevel(Number(e.target.value));
+                    setNewApproverId('');
+                  }}
+                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-green-400 bg-white"
+                >
+                  {sub.approvalSteps.map(step => (
+                    <option key={step.level} value={step.level}>
+                      ระดับที่ {step.level}: {step.roleName} ({step.approverName || 'ไม่ระบุชื่อ'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div>
-              <p className="text-xs text-gray-500 mb-1">เปลี่ยนผู้อนุมัติ (ไม่บังคับ — ถ้าไม่เลือก จะส่งคืนอาจารย์เดิม)</p>
-              <select value={newApproverId} onChange={e => setNewApproverId(e.target.value)} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-green-400">
-                <option value="">— ส่งคืนอาจารย์เดิม ({rejectedStep.approverName || 'ไม่ระบุ'}) —</option>
-                {teachers.filter(t => t.id !== rejectedStep.approverId).map(t => (
-                  <option key={t.id} value={t.id}>{t.name}{t.department ? ` (${t.department})` : ''}</option>
-                ))}
-              </select>
+              <label className="text-[11px] text-gray-500 font-semibold mb-1 block">เหตุผลที่ส่งกลับ (บังคับ):</label>
+              <textarea
+                rows={2}
+                value={returnReason}
+                onChange={e => setReturnReason(e.target.value)}
+                placeholder="ระบุรายละเอียดหรือสิ่งที่ต้องการให้แก้ไข..."
+                className="w-full px-3 py-2 border border-amber-200 rounded-lg text-xs focus:outline-none focus:border-amber-400 resize-none"
+              />
             </div>
-            <button onClick={handleReturn} className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs transition-all">
-              <RotateCcw size={13} /> ส่งกลับพิจารณา
+
+            <div>
+              <label className="text-[11px] text-gray-500 font-semibold mb-1 block">
+                เปลี่ยนผู้อนุมัติสำหรับขั้นตอนนี้ (ไม่บังคับ — หากไม่ระบุ จะส่งคืนผู้อนุมัติคนเดิม):
+              </label>
+              {(() => {
+                const targetLvl = mode === 'pending_close' ? returnToLevel : rejectedStep?.level;
+                const activeStep = sub.approvalSteps.find(s => s.level === targetLvl);
+                return (
+                  <select
+                    value={newApproverId}
+                    onChange={e => setNewApproverId(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-green-400 bg-white"
+                  >
+                    <option value="">— ส่งคืนคนเดิม ({activeStep?.approverName || 'ไม่ระบุ'}) —</option>
+                    {teachers
+                      .filter(t => t.id !== activeStep?.approverId)
+                      .map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}{t.department ? ` (${t.department})` : ''}
+                        </option>
+                      ))}
+                  </select>
+                );
+              })()}
+            </div>
+
+            <button
+              onClick={handleReturn}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs transition-all w-full justify-center"
+            >
+              <RotateCcw size={13} /> ยืนยันส่งกลับเพื่อแก้ไขและพิจารณาใหม่
             </button>
           </div>
         )}

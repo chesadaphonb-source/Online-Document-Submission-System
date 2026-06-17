@@ -542,18 +542,70 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
     const isChangingApprover = !!newApproverId && newApproverId !== targetStep.approverId;
     const finalApproverId = newApproverId || targetStep.approverId;
     const finalApproverName = newApproverName || targetStep.approverName;
-    const newSteps: ApprovalStep[] = sub.approvalSteps.map(step =>
-      step.level === level
-        ? {
-            ...step, status: 'pending', comment: undefined, timestamp: undefined,
-            returnedByAdminAt: now, returnReason: reason,
-            ...(isChangingApprover ? {
-              previousApproverId: step.approverId, previousApproverName: step.approverName,
-              approverId: finalApproverId, approverName: finalApproverName, isSubstitute: true,
-            } : {}),
-          }
-        : step
-    );
+    const newSteps: ApprovalStep[] = sub.approvalSteps.map(step => {
+      if (step.level === level) {
+        return {
+          ...step,
+          status: 'pending',
+          comment: undefined,
+          timestamp: undefined,
+          signatureData: undefined,
+          signatureX: undefined,
+          signatureY: undefined,
+          signatureSize: undefined,
+          extraSignaturePositions: undefined,
+          textBlock: undefined,
+          textBlockX: undefined,
+          textBlockY: undefined,
+          textBlockSize: undefined,
+          dateBlock: undefined,
+          dateX: undefined,
+          dateY: undefined,
+          dateSize: undefined,
+          checkmarkBlock: undefined,
+          checkmarkX: undefined,
+          checkmarkY: undefined,
+          extraTextBlocks: undefined,
+          page: undefined,
+          returnedByAdminAt: now,
+          returnReason: reason,
+          ...(isChangingApprover ? {
+            previousApproverId: step.approverId,
+            previousApproverName: step.approverName,
+            approverId: finalApproverId,
+            approverName: finalApproverName,
+            isSubstitute: true,
+          } : {}),
+        };
+      } else if (step.level > level) {
+        return {
+          ...step,
+          status: 'pending',
+          comment: undefined,
+          timestamp: undefined,
+          signatureData: undefined,
+          signatureX: undefined,
+          signatureY: undefined,
+          signatureSize: undefined,
+          extraSignaturePositions: undefined,
+          textBlock: undefined,
+          textBlockX: undefined,
+          textBlockY: undefined,
+          textBlockSize: undefined,
+          dateBlock: undefined,
+          dateX: undefined,
+          dateY: undefined,
+          dateSize: undefined,
+          checkmarkBlock: undefined,
+          checkmarkX: undefined,
+          checkmarkY: undefined,
+          extraTextBlocks: undefined,
+          page: undefined,
+        };
+      } else {
+        return step;
+      }
+    });
     setSubmissions(prev =>
       prev.map(s => s.id === submissionId
         ? { ...s, approvalSteps: newSteps, status: 'in-review', currentApprovalLevel: level, updatedAt: now }

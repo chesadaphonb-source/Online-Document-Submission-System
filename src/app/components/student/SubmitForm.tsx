@@ -987,6 +987,15 @@ export function SubmitForm() {
             <p className="text-gray-500 text-sm mb-4">แนบเอกสารหลักฐานประกอบคำร้อง (เฉพาะไฟล์ PDF, สูงสุด 20MB/ไฟล์)</p>
 
             {/* Instruction Manual / Naming Guideline */}
+            <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl">
+              <p className="text-xs font-bold text-rose-700 mb-1.5 flex items-center gap-1.5">
+                ⚠️ ข้อสำคัญที่สุด (Important Notice):
+              </p>
+              <p className="text-xs text-rose-800 font-semibold leading-relaxed">
+                ห้ามแนบคำร้องต่างชนิดกันมาในรายการเดียวกัน หรือรวมไฟล์ PDF ต่างแบบฟอร์มเข้าด้วยกัน (เช่น รวม "คำร้องขอลงทะเบียนเรียน" และ "ใบ KU-3" เป็นไฟล์เดียว) เนื่องจากมีขั้นตอนการอนุมัติและผู้อนุมัติที่ต่างกัน <strong>กรุณาแยกยื่นคำร้องแยกกันทีละรายการในหมวดหมู่ที่ถูกต้องเท่านั้น!</strong>
+              </p>
+            </div>
+
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
               <p className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5">
                 💡 คู่มือการส่งเอกสารและตั้งชื่อไฟล์:
