@@ -231,7 +231,7 @@ export function SignatureAndPlaceModal({
 
   // Checkmark states
   const [useCheckmark, setUseCheckmark] = useState(false);
-  const [checkmarkVal, setCheckmarkVal] = useState('✓');
+  const [checkmarkVal] = useState('/');
   const [checkmarkPos, setCheckmarkPos] = useState(() => defaults.checkmark);
 
   // Dragging — type carries index for text items
@@ -671,7 +671,7 @@ export function SignatureAndPlaceModal({
                   </div>
                 </div>
 
-                {/* Column 3: Checkmark (Tick) Tool helper */}
+                {/* Column 3: Mark Tool helper */}
                 <div className="space-y-2 bg-white p-2.5 rounded-lg border border-gray-200 flex flex-col justify-between">
                   <div className="space-y-1">
                     <label className="flex items-center gap-1.5 font-semibold text-gray-700 cursor-pointer">
@@ -681,21 +681,15 @@ export function SignatureAndPlaceModal({
                         onChange={e => setUseCheckmark(e.target.checked)}
                         className="w-3.5 h-3.5 rounded text-green-600 border-gray-300 focus:ring-green-500 accent-green-600"
                       />
-                      <span>✅ เพิ่มเครื่องหมายติ๊กถูก (✓)</span>
+                      <span>/ เพิ่มเครื่องหมาย (ขีด)</span>
                     </label>
-                    <p className="text-[10px] text-gray-400">ลากไปวางในช่องสี่เหลี่ยม [ ] เลือก อนุมัติ/ไม่อนุมัติ</p>
+                    <p className="text-[10px] text-gray-400">ลากไปวางในช่องสี่เหลี่ยม [ ] เลือก อนุมัติ</p>
                   </div>
                   <div className="pt-2">
-                    <select
-                      value={checkmarkVal}
-                      onChange={e => setCheckmarkVal(e.target.value)}
-                      disabled={!useCheckmark}
-                      className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-green-500 disabled:bg-gray-50 disabled:text-gray-400 bg-white font-medium cursor-pointer"
-                    >
-                      <option value="✓">✓ เครื่องหมายถูกมาตรฐาน (✓)</option>
-                      <option value="✔">✔ เครื่องหมายหนาเข้ม (✔)</option>
-                      <option value="✗">✗ เครื่องหมายผิด/กากบาท (✗)</option>
-                    </select>
+                    <div className={`w-full px-2 py-1.5 text-center text-lg font-bold border border-gray-200 rounded ${useCheckmark ? 'text-gray-800 bg-white' : 'text-gray-300 bg-gray-50'}`}>
+                      /
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1 text-center">ขีดเส้นเฉียง</p>
                   </div>
                 </div>
 
@@ -919,14 +913,12 @@ export function SignatureAndPlaceModal({
                     </div>
                   )}
 
-                  {/* Draggable Checkmark Block */}
+                  {/* Draggable Mark Block */}
                   {(pdfImageUrl || !selectedPdf) && useCheckmark && checkmarkVal && (
                     <div
                       onMouseDown={(e) => onMouseDown(e, 'checkmark')}
                       onTouchStart={(e) => onTouchStart(e, 'checkmark')}
-                      className={`absolute cursor-grab active:cursor-grabbing select-none font-extrabold ${
-                        checkmarkVal === '✗' ? 'text-red-700 border-red-500' : 'text-green-700 border-green-500'
-                      } bg-transparent border border-dashed rounded flex items-center justify-center`}
+                      className="absolute cursor-grab active:cursor-grabbing select-none font-bold text-gray-800 bg-transparent border border-dashed border-gray-500 rounded flex items-center justify-center"
                       style={{
                         left: `${checkmarkPos.x}%`,
                         top: `${checkmarkPos.y}%`,

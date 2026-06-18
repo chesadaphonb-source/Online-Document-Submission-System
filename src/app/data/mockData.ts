@@ -47,6 +47,7 @@ export interface Teacher {
   isAdvisor?: boolean;
   isDepartmentHead?: boolean;
   isDean?: boolean;
+  signatureData?: string;
   campus?: string;
 }
 

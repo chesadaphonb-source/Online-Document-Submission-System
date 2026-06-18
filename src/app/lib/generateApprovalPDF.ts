@@ -566,20 +566,10 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission, pageNu
       const fontSize = step.checkmarkSize || 15;
       const size_mm = fontSize * 0.352778; // Convert pt to mm
       
-      if (step.checkmarkBlock === '✗') {
-        // Draw cross mark (gabarot) in red
-        doc.setDrawColor(185, 28, 28); // red-700
-        doc.setLineWidth(size_mm * 0.15);
-        doc.line(cx + size_mm * 0.2, cy + size_mm * 0.2, cx + size_mm * 0.8, cy + size_mm * 0.8);
-        doc.line(cx + size_mm * 0.2, cy + size_mm * 0.8, cx + size_mm * 0.8, cy + size_mm * 0.2);
-      } else {
-        // Draw checkmark in green
-        const isThick = step.checkmarkBlock === '✔';
-        doc.setDrawColor(22, 101, 52); // green checkmark color
-        doc.setLineWidth(size_mm * (isThick ? 0.27 : 0.15)); // thicker lines for bold checkmark
-        doc.line(cx + size_mm * 0.15, cy + size_mm * 0.55, cx + size_mm * 0.4, cy + size_mm * 0.8);
-        doc.line(cx + size_mm * 0.4, cy + size_mm * 0.8, cx + size_mm * 0.85, cy + size_mm * 0.25);
-      }
+      // Draw a single diagonal slash line (bottom-left to top-right)
+      doc.setDrawColor(30, 30, 30); // near-black
+      doc.setLineWidth(size_mm * 0.09);
+      doc.line(cx + size_mm * 0.2, cy + size_mm * 0.85, cx + size_mm * 0.8, cy + size_mm * 0.15);
     }
   }
 }

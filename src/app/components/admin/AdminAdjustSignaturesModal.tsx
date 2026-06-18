@@ -457,7 +457,7 @@ export function AdminAdjustSignaturesModal({
   const handleAddCheckmarkBlock = (level: number) => {
     setSteps(prev => prev.map(s => {
       if (s.level !== level) return s;
-      return { ...s, checkmarkBlock: '✓', checkmarkX: (s.signatureX ?? 30) - 5, checkmarkY: (s.signatureY ?? 65), checkmarkSize: 15 };
+      return { ...s, checkmarkBlock: '/', checkmarkX: (s.signatureX ?? 30) - 5, checkmarkY: (s.signatureY ?? 65), checkmarkSize: 15 };
     }));
   };
 
@@ -773,18 +773,10 @@ export function AdminAdjustSignaturesModal({
                         {step.checkmarkBlock ? (
                           <>
                             <div className="flex items-center justify-between text-xs text-gray-500">
-                              <span className="flex items-center gap-1">✅ เครื่องหมายถูก</span>
+                              <span className="flex items-center gap-1">/ เครื่องหมาย (ขีด)</span>
                               <button onClick={() => handleRemoveCheckmarkBlock(step.level)} className="text-[10px] text-red-400 hover:text-red-600">ลบ</button>
                             </div>
-                            <select
-                              value={step.checkmarkBlock}
-                              onChange={e => handleCheckmarkBlockChange(step.level, e.target.value)}
-                              className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1a5c2e] bg-white cursor-pointer"
-                            >
-                              <option value="✓">✓ เครื่องหมายถูกมาตรฐาน (✓)</option>
-                              <option value="✔">✔ เครื่องหมายหนาเข้ม (✔)</option>
-                              <option value="✗">✗ เครื่องหมายผิด/กากบาท (✗)</option>
-                            </select>
+                            <div className="text-center py-1 border border-gray-100 rounded-lg bg-gray-50 text-xl font-bold text-gray-700">/</div>
                             <div className="flex items-center justify-between text-xs text-gray-500">
                               <span>ขนาดเครื่องหมาย</span>
                               <span className="font-semibold text-gray-700">{step.checkmarkSize || 15}px</span>
@@ -803,7 +795,7 @@ export function AdminAdjustSignaturesModal({
                             onClick={() => handleAddCheckmarkBlock(step.level)}
                             className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium text-[#1a5c2e] bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
                           >
-                            <Plus size={12} /> เพิ่มเครื่องหมายถูก (✓)
+                            <Plus size={12} /> เพิ่มเครื่องหมาย (/)
                           </button>
                         )}
                       </div>
@@ -955,14 +947,11 @@ export function AdminAdjustSignaturesModal({
                       </div>
                     ))}
 
-                    {/* Checkmark */}
                     {step.checkmarkBlock && step.checkmarkX !== undefined && step.checkmarkY !== undefined && (
                       <div
                         onMouseDown={e => onMouseDown(e, step.level, 'checkmark')}
                         onTouchStart={e => onTouchStart(e, step.level, 'checkmark')}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none font-bold ${
-                          step.checkmarkBlock === '✗' ? 'text-red-700 border-red-500' : 'text-green-700 border-green-500'
-                        } bg-transparent border border-dashed rounded flex items-center justify-center`}
+                        className="absolute cursor-grab active:cursor-grabbing select-none font-bold text-gray-800 bg-transparent border border-dashed border-gray-500 rounded flex items-center justify-center"
                         style={{
                           left: `${step.checkmarkX}%`,
                           top: `${step.checkmarkY}%`,

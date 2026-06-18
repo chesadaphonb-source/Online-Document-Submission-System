@@ -143,9 +143,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (!isSupabaseConfigured || !supabase) return [];
     try {
       if (recipientId === 'role:admin') {
-        const { data } = await supabase.from('users').select('email, department').eq('role', 'admin');
+        const { data, error } = await supabase.from('users').select('email, department').eq('role', 'admin');
+        if (error) { console.warn('[lookupEmails] admin query error:', error.message); return []; }
         if (!data) return [];
-        return data
+        const filtered = data
           .filter((u: any) => {
             const isSuper = u.email ? SUPER_ADMIN_EMAILS.includes(u.email) : false;
             if (isSuper) return true;
@@ -154,14 +155,29 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           })
           .map((r: any) => r.email)
           .filter(Boolean);
+        console.log('[lookupEmails] role:admin →', filtered);
+        return filtered;
       } else if (recipientId === 'role:teacher') {
-        const { data } = await supabase.from('users').select('email').eq('role', 'teacher');
-        return (data || []).map((r: any) => r.email).filter(Boolean);
+        const { data, error } = await supabase.from('users').select('email').eq('role', 'teacher');
+        if (error) { console.warn('[lookupEmails] teacher query error:', error.message); return []; }
+        const emails = (data || []).map((r: any) => r.email).filter(Boolean);
+        console.log('[lookupEmails] role:teacher →', emails);
+        return emails;
       } else {
-        const { data } = await supabase.from('users').select('email').eq('id', recipientId).single();
-        return data?.email ? [data.email] : [];
+        // Lookup individual user email
+        const { data, error } = await supabase.from('users').select('email, role').eq('id', recipientId).maybeSingle();
+        if (error) { console.warn('[lookupEmails] user query error:', error.message); }
+        if (data?.email) {
+          console.log('[lookupEmails] user', recipientId, '→', data.email);
+          return [data.email];
+        }
+        console.warn('[lookupEmails] no email found for recipientId:', recipientId);
+        return [];
       }
-    } catch { return []; }
+    } catch (err) {
+      console.error('[lookupEmails] exception:', err);
+      return [];
+    }
   };
 
   const addNotification = useCallback(async (n: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => {
@@ -206,8 +222,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (emails.length === 0 && n.studentEmail) {
         emails = [n.studentEmail];
       }
+      console.log('[addNotification] Sending email to:', emails, 'for type:', n.type);
       if (emails.length > 0) {
-        await fetch('/api/send-email', {
+        const emailRes = await fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -224,8 +241,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             studentId: n.studentId,
           }),
         });
+        if (!emailRes.ok) {
+          const errBody = await emailRes.text();
+          console.error('[addNotification] send-email failed:', emailRes.status, errBody);
+        }
       }
-    } catch { /* ไม่หยุดระบบหลัก */ }
+    } catch (err) {
+      console.error('[addNotification] email exception:', err);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

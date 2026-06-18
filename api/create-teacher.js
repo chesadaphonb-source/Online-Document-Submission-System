@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://idjxzhzyadykcvuavszf.supabase.co';
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://qurxmazwgfozpfglnxnc.supabase.co';
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!serviceRoleKey) {

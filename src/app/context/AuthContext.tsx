@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, mockUsers, loginCredentials } from '../data/mockData';
+import { User, Student, Teacher, Admin, mockUsers, loginCredentials } from '../data/mockData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 
@@ -10,7 +10,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isLoading: boolean;
   mode: 'supabase' | 'mock';
-  updateCurrentUserProfile: (updatedData: Partial<User>) => void;
+  updateCurrentUserProfile: (updatedData: Partial<Student & Teacher & Admin>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -196,10 +196,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUser(null);
   };
 
-  const updateCurrentUserProfile = (updatedData: Partial<User>) => {
+  const updateCurrentUserProfile = (updatedData: Partial<Student & Teacher & Admin>) => {
     setCurrentUser(prev => {
       if (!prev) return null;
-      const newProfile = { ...prev, ...updatedData };
+      const newProfile = { ...prev, ...updatedData } as User;
       localStorage.setItem('ku_paper_user_profile', JSON.stringify(newProfile));
       return newProfile;
     });
