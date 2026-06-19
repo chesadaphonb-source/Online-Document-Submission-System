@@ -45,7 +45,7 @@ function DeadlinePicker({ onSet }: { onSet: (date: string) => void }) {
 }
 
 // ── Submission Card for Admin Inbox ───────────────────────────
-function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'teacher_rejected' | 'pending_close'; teachers: DBTeacher[] }) {
+function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'teacher_rejected' | 'pending_close' | 'in_review'; teachers: DBTeacher[] }) {
   const { currentUser } = useAuth();
   const { adminReceive, adminForward, adminRejectFinal, adminReturnToTeacher, adminClose, adminSetDeadline, updateSubmission, adminEditFormData } = useSubmissions();
   const [expanded, setExpanded] = useState(false);
@@ -247,6 +247,22 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
 
           <div className="flex-1" />
 
+          {mode === 'in_review' && (
+            <>
+              <div className="flex items-center gap-1.5 text-xs text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg">
+                <Shield size={13} /> Super Admin
+              </div>
+              <button
+                onClick={() => setShowRejectForm(!showRejectForm)}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all ${
+                  showRejectForm ? 'text-gray-500 bg-gray-50' : 'text-red-600 bg-red-50 hover:bg-red-100'
+                }`}
+              >
+                <XCircle size={13} /> ยกเลิกคำร้อง
+              </button>
+            </>
+          )}
+
           {mode === 'new' && (
             <>
               <button onClick={() => setShowDeadline(!showDeadline)} className="flex items-center gap-1.5 text-xs text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-all">
@@ -446,17 +462,23 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
         )}
 
 
-        {/* Reject form */}
+        {/* Reject / Cancel form */}
         {showRejectForm && (
           <div className="px-4 pb-4 border-t border-gray-100 pt-3">
+            {mode === 'in_review' && (
+              <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+                <XCircle size={13} className="shrink-0" />
+                <span><strong>ยกเลิกคำร้องโดย Super Admin</strong> — คำร้องจะถูกยกเลิกทันทีโดยไม่รออาจารย์ และนิสิตจะได้รับแจ้งพร้อมเหตุผล</span>
+              </div>
+            )}
             <p className="text-xs text-gray-700 font-semibold mb-2">
-              {mode === 'new' ? 'เหตุผลที่ตีกลับคำร้องให้นิสิต' : mode === 'pending_close' ? 'เหตุผลที่ตีกลับคำร้องให้นิสิต (ปฏิเสธคำร้อง)' : 'เหตุผลที่ยืนยันไม่อนุมัติ'}
+              {mode === 'in_review' ? 'เหตุผลที่ยกเลิกคำร้อง (แจ้งนิสิต)' : mode === 'new' ? 'เหตุผลที่ตีกลับคำร้องให้นิสิต' : mode === 'pending_close' ? 'เหตุผลที่ตีกลับคำร้องให้นิสิต (ปฏิเสธคำร้อง)' : 'เหตุผลที่ยืนยันไม่อนุมัติ'}
             </p>
             <textarea
-              rows={2}
+              rows={3}
               value={rejectReason}
               onChange={e => setRejectReason(e.target.value)}
-              placeholder="ระบุเหตุผลการตีกลับ/ไม่อนุมัติ เพื่อแจ้งให้นิสิตทราบ (บังคับ)"
+              placeholder={mode === 'in_review' ? 'ระบุเหตุผลการยกเลิก เช่น "เอกสารไม่ครบถ้วน", "ขาดคุณสมบัติ" ฯลฯ (บังคับกรอก)' : 'ระบุเหตุผลการตีกลับ/ไม่อนุมัติ เพื่อแจ้งให้นิสิตทราบ (บังคับ)'}
               className="w-full px-3 py-2 border border-red-200 rounded-lg text-xs focus:outline-none focus:border-red-400 resize-none mb-2"
             />
             <button
@@ -467,7 +489,7 @@ function InboxCard({ sub, mode, teachers }: { sub: Submission; mode: 'new' | 'te
               }}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs transition-all w-full justify-center"
             >
-              <XCircle size={13} /> ยืนยันตีกลับคำร้อง (ส่งกลับให้นิสิตแก้ไขใหม่)
+              <XCircle size={13} /> {mode === 'in_review' ? 'ยืนยันยกเลิกคำร้อง (แจ้งนิสิตทันที)' : 'ยืนยันตีกลับคำร้อง (ส่งกลับให้นิสิตแก้ไขใหม่)'}
             </button>
           </div>
         )}
@@ -672,7 +694,7 @@ function PriorityBadge({ deadline }: { deadline?: string }) {
 export function AdminInbox() {
   const { submissions } = useSubmissions();
   const { currentUser } = useAuth();
-  const [tab, setTab] = useState<'new' | 'teacher_rejected' | 'pending_close'>('new');
+  const [tab, setTab] = useState<'new' | 'teacher_rejected' | 'pending_close' | 'in_review'>('new');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterDept, setFilterDept] = useState('all');
@@ -716,15 +738,17 @@ export function AdminInbox() {
   const newSubs = mySubmissions.filter(s => s.status === 'submitted' || s.status === 'admin_reviewing');
   const rejectedSubs = mySubmissions.filter(s => s.status === 'teacher_rejected');
   const closeSubs = mySubmissions.filter(s => s.status === 'pending_close');
+  const inReviewSubs = isSuperAdmin ? mySubmissions.filter(s => s.status === 'in-review') : [];
 
   const tabs = [
     { key: 'new' as const, label: 'รอรับเรื่อง', count: newSubs.length, color: 'text-blue-600', dot: 'bg-blue-500' },
     { key: 'teacher_rejected' as const, label: 'อาจารย์ปฏิเสธ', count: rejectedSubs.length, color: 'text-orange-600', dot: 'bg-orange-500' },
     { key: 'pending_close' as const, label: 'รอปิดงาน', count: closeSubs.length, color: 'text-teal-600', dot: 'bg-teal-500' },
+    ...(isSuperAdmin ? [{ key: 'in_review' as const, label: 'กำลังพิจารณา', count: inReviewSubs.length, color: 'text-indigo-600', dot: 'bg-indigo-500' }] : []),
   ];
 
   // ── รายการตาม Tab ปัจจุบัน
-  const rawItems = tab === 'new' ? newSubs : tab === 'teacher_rejected' ? rejectedSubs : closeSubs;
+  const rawItems = tab === 'new' ? newSubs : tab === 'teacher_rejected' ? rejectedSubs : tab === 'in_review' ? inReviewSubs : closeSubs;
 
   // ── ภาควิชาทั้งหมดในคณะ (static list เพื่อให้แสดงครบทุกภาค)
   const departments = [
@@ -770,7 +794,7 @@ export function AdminInbox() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid gap-3 ${isSuperAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
         {tabs.map(t => (
           <div key={t.key} className="bg-white rounded-xl border border-green-100 p-4 text-center">
             <p className={`text-2xl font-bold ${t.color}`}>{t.count}</p>
@@ -865,7 +889,7 @@ export function AdminInbox() {
                   <PriorityBadge deadline={sub.deadline} />
                 </div>
               )}
-              <InboxCard sub={sub} mode={tab} teachers={teachers} />
+              <InboxCard sub={sub} mode={tab as any} teachers={teachers} />
             </div>
           ))}
         </div>
