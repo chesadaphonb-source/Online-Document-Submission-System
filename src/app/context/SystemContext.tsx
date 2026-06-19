@@ -11,7 +11,7 @@ interface SystemContextType {
 
 const SystemContext = createContext<SystemContextType | undefined>(undefined);
 
-export const SUPER_ADMIN_EMAILS = ['chesadaphon.b@ku.th', 'rampai.s@ku.th', 'rampai.se@ku.th'];
+export const SUPER_ADMIN_EMAILS = ['chesadaphon.b@ku.th', 'chesadaphonb@ku.th', 'rampai.s@ku.th', 'rampai.se@ku.th'];
 
 export function SystemProvider({ children }: { children: ReactNode }) {
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
