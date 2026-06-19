@@ -80,7 +80,10 @@ function SubmissionRow({ sub }: { sub: Submission }) {
   const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const { currentUser } = useAuth();
-  const { updateSubmission, updateSignaturePositions } = useSubmissions();
+  const { updateSubmission, updateSignaturePositions, adminRejectFinal } = useSubmissions();
+  const isSuperAdmin = currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email) : false;
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const template = formTemplates.find(f => f.id === sub.formType);
   const hasAttachments = sub.attachments && sub.attachments.length > 0;
 
@@ -222,6 +225,15 @@ function SubmissionRow({ sub }: { sub: Submission }) {
               <Move size={13} /> ปรับตำแหน่งลายเซ็น
             </button>
           )}
+          {isSuperAdmin && sub.status === 'in-review' && (
+            <button
+              onClick={() => { setShowCancelDialog(true); setCancelReason(''); }}
+              className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 border-l border-gray-100 transition-colors shrink-0"
+              title="ยกเลิกคำร้องนี้ทันที (เฉพาะ Super Admin)"
+            >
+              <XCircle size={13} /> ยกเลิกคำร้อง
+            </button>
+          )}
         </div>
 
         {expanded && (
@@ -315,6 +327,58 @@ function SubmissionRow({ sub }: { sub: Submission }) {
             }
           }}
         />
+      )}
+
+      {/* Cancel Submission Dialog (Super Admin) */}
+      {showCancelDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <XCircle size={20} className="text-red-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800">ยกเลิกคำร้อง</p>
+                <p className="text-xs text-gray-500">{sub.formName} — {sub.studentName}</p>
+              </div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-700">
+              <Shield size={12} className="inline mr-1" />
+              <strong>Super Admin</strong> — คำร้องจะถูกยกเลิกทันทีโดยไม่รออาจารย์ และนิสิตจะได้รับแจ้งทางอีเมลพร้อมเหตุผล
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-700 mb-1.5">เหตุผลที่ยกเลิก (แจ้งนิสิต) <span className="text-red-500">*</span></p>
+              <textarea
+                rows={3}
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder='ระบุเหตุผล เช่น "เอกสารไม่ครบถ้วน", "ขาดคุณสมบัติ", "ยื่นผิดช่องทาง" ฯลฯ'
+                className="w-full px-3 py-2 border border-red-200 rounded-xl text-xs focus:outline-none focus:border-red-400 resize-none"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowCancelDialog(false); setCancelReason(''); }}
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => {
+                  if (!cancelReason.trim()) { toast.error('กรุณาระบุเหตุผล'); return; }
+                  adminRejectFinal(sub.id, currentUser?.id || '', currentUser?.name || 'Super Admin', cancelReason.trim());
+                  setShowCancelDialog(false);
+                  setCancelReason('');
+                  toast.success('ยกเลิกคำร้องแล้ว นิสิตได้รับการแจ้งเตือน');
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-medium transition-colors"
+              >
+                ยืนยันยกเลิกคำร้อง
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
