@@ -566,8 +566,8 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission, pageNu
       const fontSize = step.checkmarkSize || 15;
       const size_mm = fontSize * 0.352778; // Convert pt to mm
       
-      // Draw a thin green diagonal slash — steep right-lean, like a light pen stroke
-      doc.setDrawColor(30, 130, 60); // green ink
+      // Draw a thin blue diagonal slash — steep right-lean, like a ballpoint pen stroke
+      doc.setDrawColor(30, 60, 180); // pen blue ink
       doc.setLineWidth(size_mm * 0.03); // very thin
       doc.line(
         cx + size_mm * 0.35, cy + size_mm * 0.95,  // bottom (more centered)
