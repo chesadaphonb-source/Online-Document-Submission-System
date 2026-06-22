@@ -566,13 +566,12 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission, pageNu
       const fontSize = step.checkmarkSize || 15;
       const size_mm = fontSize * 0.352778; // Convert pt to mm
       
-      // Draw a thin diagonal slash — slightly right-leaning, like a pen stroke
-      doc.setDrawColor(30, 30, 30); // near-black
-      doc.setLineWidth(size_mm * 0.045); // thinner line
-      // Start bottom-left, end top-right with slight right lean
+      // Draw a thin green diagonal slash — steep right-lean, like a light pen stroke
+      doc.setDrawColor(30, 130, 60); // green ink
+      doc.setLineWidth(size_mm * 0.03); // very thin
       doc.line(
-        cx + size_mm * 0.25, cy + size_mm * 0.9,   // bottom start (left-center)
-        cx + size_mm * 0.75, cy + size_mm * 0.05    // top end (right-center)
+        cx + size_mm * 0.35, cy + size_mm * 0.95,  // bottom (more centered)
+        cx + size_mm * 0.85, cy + size_mm * 0.0     // top-right (steep lean)
       );
     }
   }
