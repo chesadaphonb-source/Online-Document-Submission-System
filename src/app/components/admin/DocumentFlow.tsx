@@ -242,13 +242,13 @@ function SubmissionRow({ sub }: { sub: Submission }) {
             <div className="mt-3 pt-3 border-t border-gray-100">
               <p className="text-xs text-gray-500 font-medium mb-2">ข้อมูลที่กรอก</p>
               <div className="grid grid-cols-2 gap-2">
-                {Object.entries(sub.formData).slice(0, 4).map(([key, val]) => {
+                {Object.entries(sub.formData).map(([key, val]) => {
                   const field = template?.fields.find(f => f.id === key);
                   const formattedVal = formatMoney(val, field?.label || key);
                   return (
-                    <div key={key} className="text-xs">
+                    <div key={key} className="text-xs col-span-2">
                       <span className="text-gray-400">{field?.label || key}: </span>
-                      <span className="text-gray-700">{formattedVal.length > 40 ? formattedVal.slice(0, 37) + '...' : formattedVal}</span>
+                      <span className="text-gray-700 break-words whitespace-pre-wrap">{formattedVal}</span>
                     </div>
                   );
                 })}
