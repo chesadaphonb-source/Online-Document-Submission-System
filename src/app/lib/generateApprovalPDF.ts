@@ -578,6 +578,59 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission, pageNu
 }
 
 /**
+ * Resolves attachment blob with automatic fallback to template PDF if original URL is unreachable/offline.
+ */
+async function resolveAttachmentBlob(submission: Submission, sourceUrl: string): Promise<{ blob: Blob; isFallback: boolean }> {
+  if (sourceUrl.startsWith('blob:') || sourceUrl.startsWith('data:')) {
+    const res = await fetch(sourceUrl);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const blob = await res.blob();
+    return { blob, isFallback: false };
+  }
+  try {
+    const blob = await getCachedFileBlob(sourceUrl);
+    return { blob, isFallback: false };
+  } catch (err) {
+    console.warn(`[generateApprovalPDF] Failed to fetch attachment from ${sourceUrl}. Attempting template fallback...`, err);
+    
+    // Check if we can find a matching template PDF from public/templates
+    const templateCandidates = [
+      `/templates/form_${submission.formType}.pdf`,
+      (submission.formType === 'fee-deferment' || submission.formName?.includes('ผ่อนผัน'))
+        ? '/templates/form_02bc1653-38ef-4b64-aeba-2c09906a659b.pdf'
+        : null,
+      (submission.formType === 'registration-request' || submission.formName?.includes('ลงทะเบียน'))
+        ? '/templates/form_95696020-a0a2-41ae-902b-c0b36f608f6d.pdf'
+        : null,
+      (submission.formType === 'exam-postponement' || submission.formName?.includes('เลื่อนสอบ'))
+        ? '/templates/form_5b13504c-9127-4af8-88d6-f0d1001e529b.pdf'
+        : null,
+      submission.formName?.includes('KU1') ? '/templates/form_f74cfd5d-277c-4560-808d-d4164716f4ee.pdf' : null,
+      submission.formName?.includes('KU3') ? '/templates/form_d021380b-babc-4c70-a435-5ef8a89ff76c.pdf' : null,
+      submission.formName?.includes('ลาพัก') ? '/templates/form_1a35b1e1-5eda-44a4-9b9f-3b1de6fb0575.pdf' : null,
+      submission.formName?.includes('ชื่อ') ? '/templates/form_3e6ac91c-2bd2-450a-ae0f-35deb403e532.pdf' : null,
+      '/templates/form_e0818675-433c-448e-9d83-37cdc27744f5.pdf', // General request fallback
+    ].filter(Boolean) as string[];
+
+    for (const tUrl of templateCandidates) {
+      try {
+        const tRes = await fetch(tUrl);
+        if (tRes.ok) {
+          const tBlob = await tRes.blob();
+          if (tBlob.size > 1000) {
+            console.log(`[generateApprovalPDF] Found template fallback: ${tUrl}`);
+            return { blob: tBlob, isFallback: true };
+          }
+        }
+      } catch (e) {
+        // try next candidate
+      }
+    }
+    throw err;
+  }
+}
+
+/**
  * Generates the signed attachment and returns a blob URL for inline preview (does NOT download).
  */
 export async function previewSignedAttachmentPDF(submission: Submission, attachmentUrl: string, fileName: string): Promise<string> {
@@ -592,28 +645,19 @@ export async function previewSignedAttachmentPDF(submission: Submission, attachm
   doc.addFont('THSarabun.ttf', 'THSarabun', 'normal');
   doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
 
-  if (isImage) {
-    let imgDataUrl = sourceUrl;
-    if (!sourceUrl.startsWith('blob:') && !sourceUrl.startsWith('data:')) {
-      const blob = await getCachedFileBlob(sourceUrl);
-      imgDataUrl = URL.createObjectURL(blob);
-    }
+  const { blob: sourceBlob } = await resolveAttachmentBlob(submission, sourceUrl);
+
+  if (isImage && !sourceBlob.type.includes('pdf')) {
+    const imgDataUrl = URL.createObjectURL(sourceBlob);
     const isPng = fnLower.endsWith('.png') || sourceUrlLower.endsWith('.png') || sourceUrlLower.includes('.png?');
     const format = isPng ? 'PNG' : 'JPEG';
     doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
     await drawSignaturesAndTexts(doc, submission, 1);
-    if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
+    URL.revokeObjectURL(imgDataUrl);
   } else {
     const pdfjsLib = await import('pdfjs-dist');
     pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
-    let pdfData: ArrayBuffer;
-    if (sourceUrl.startsWith('blob:') || sourceUrl.startsWith('data:')) {
-      const res = await fetch(sourceUrl);
-      pdfData = await res.arrayBuffer();
-    } else {
-      const blob = await getCachedFileBlob(sourceUrl);
-      pdfData = await blob.arrayBuffer();
-    }
+    const pdfData = await sourceBlob.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
     for (let i = 1; i <= pdf.numPages; i++) {
       if (i > 1) doc.addPage();
@@ -651,26 +695,18 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
     doc.addFont('THSarabun.ttf', 'THSarabun', 'normal');
     doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
 
-    if (isImage) {
-      // ── IMAGE FLOW ──
-      // Fetch image bytes to avoid CORS
-      let imgDataUrl = sourceUrl;
-      if (!sourceUrl.startsWith('blob:') && !sourceUrl.startsWith('data:')) {
-        const blob = await getCachedFileBlob(sourceUrl);
-        imgDataUrl = URL.createObjectURL(blob);
-      }
+    const { blob: sourceBlob } = await resolveAttachmentBlob(submission, sourceUrl);
 
-      // Add image as background A4: 210mm x 297mm
+    if (isImage && !sourceBlob.type.includes('pdf')) {
+      // ── IMAGE FLOW ──
+      const imgDataUrl = URL.createObjectURL(sourceBlob);
       const isPng = fnLower.endsWith('.png') || sourceUrlLower.endsWith('.png') || sourceUrlLower.includes('.png?');
       const format = isPng ? 'PNG' : 'JPEG';
       doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
 
       // Superimpose signatures & text blocks
       await drawSignaturesAndTexts(doc, submission, 1);
-
-      if (imgDataUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(imgDataUrl);
-      }
+      URL.revokeObjectURL(imgDataUrl);
     } else {
       // ── PDF FLOW ──
       const pdfjsLib = await import('pdfjs-dist');
@@ -679,15 +715,7 @@ export async function generateSignedAttachmentPDF(submission: Submission, attach
         import.meta.url,
       ).href;
 
-      let pdfData: ArrayBuffer;
-      if (sourceUrl.startsWith('blob:') || sourceUrl.startsWith('data:')) {
-        const res = await fetch(sourceUrl);
-        pdfData = await res.arrayBuffer();
-      } else {
-        const blob = await getCachedFileBlob(sourceUrl);
-        pdfData = await blob.arrayBuffer();
-      }
-
+      const pdfData = await sourceBlob.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
       const numPages = pdf.numPages;
 
@@ -750,17 +778,15 @@ export async function generateAdjustedPDFBlob(
   doc.addFont('THSarabun.ttf', 'THSarabun', 'normal');
   doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
 
-  if (isImage) {
-    let imgDataUrl = attachmentUrl;
-    if (!attachmentUrl.startsWith('blob:') && !attachmentUrl.startsWith('data:')) {
-      const blob = await getCachedFileBlob(attachmentUrl);
-      imgDataUrl = URL.createObjectURL(blob);
-    }
+  const { blob: sourceBlob } = await resolveAttachmentBlob(submission, attachmentUrl);
+
+  if (isImage && !sourceBlob.type.includes('pdf')) {
+    const imgDataUrl = URL.createObjectURL(sourceBlob);
     const isPng = fnLower.endsWith('.png') || urlLower.endsWith('.png') || urlLower.includes('.png?');
     const format = isPng ? 'PNG' : 'JPEG';
     doc.addImage(imgDataUrl, format, 0, 0, 210, 297);
     await drawSignaturesAndTexts(doc, submission, 1);
-    if (imgDataUrl.startsWith('blob:')) URL.revokeObjectURL(imgDataUrl);
+    URL.revokeObjectURL(imgDataUrl);
   } else {
     const pdfjsLib = await import('pdfjs-dist');
     pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -768,15 +794,7 @@ export async function generateAdjustedPDFBlob(
       import.meta.url,
     ).href;
 
-    let pdfData: ArrayBuffer;
-    if (attachmentUrl.startsWith('blob:') || attachmentUrl.startsWith('data:')) {
-      const res = await fetch(attachmentUrl);
-      pdfData = await res.arrayBuffer();
-    } else {
-      const blob = await getCachedFileBlob(attachmentUrl);
-      pdfData = await blob.arrayBuffer();
-    }
-
+    const pdfData = await sourceBlob.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
     for (let i = 1; i <= pdf.numPages; i++) {
       if (i > 1) doc.addPage();
