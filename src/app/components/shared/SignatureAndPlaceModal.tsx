@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { Attachment, ApprovalStep } from '../../data/mockData';
 import { getCachedFileBlob } from '../../lib/fileCache';
+import { DocumentTextOverlay, DocumentCheckmarkOverlay } from './DocumentTextOverlay';
 
 // ── Render PDF page to image URL (offscreen canvas) ──────────
 // Fetches the PDF as bytes first (avoids pdf.js CORS XHR issue),
@@ -699,8 +700,8 @@ export function SignatureAndPlaceModal({
               <div className="flex flex-col items-center gap-2">
                 <div
                   ref={pageContainerRef}
-                  className="relative bg-white border border-gray-300 shadow-md select-none overflow-hidden w-full"
-                  style={{ maxWidth: 560, aspectRatio: '1 / 1.414' }}
+                  className="relative bg-white outline outline-1 outline-gray-300 shadow-md select-none overflow-hidden w-full"
+                  style={{ maxWidth: 560, aspectRatio: '210 / 297' }}
                 >
                   {/* PDF as image */}
                   {selectedPdf ? (
@@ -729,7 +730,7 @@ export function SignatureAndPlaceModal({
                     </>
                   ) : (
                     /* Blank A4 fallback */
-                    <div style={{ aspectRatio: '1 / 1.414', backgroundImage: 'repeating-linear-gradient(transparent, transparent 27px, #e5e7eb 27px, #e5e7eb 28px)' }}>
+                    <div style={{ aspectRatio: '210 / 297', backgroundImage: 'repeating-linear-gradient(transparent, transparent 27px, #e5e7eb 27px, #e5e7eb 28px)' }}>
                       <div className="p-6 opacity-15 space-y-2 pointer-events-none">
                         <div className="h-3 bg-gray-500 rounded w-1/2 mx-auto" />
                         <div className="h-2 bg-gray-400 rounded w-full mt-2" />
@@ -753,7 +754,6 @@ export function SignatureAndPlaceModal({
                             left: `${step.signatureX}%`,
                             top: `${step.signatureY}%`,
                             width: `${step.signatureSize || 12}%`,
-                            transform: 'translateY(-2%)',
                           }}
                         />
                       )}
@@ -769,70 +769,35 @@ export function SignatureAndPlaceModal({
                               left: `${esp.x}%`,
                               top: `${esp.y}%`,
                               width: `${step.signatureSize || 12}%`,
-                              transform: 'translateY(-2%)',
                             }}
                           />
                         )
                       ))}
                       {step.textBlock && step.textBlockX !== undefined && step.textBlockY !== undefined && (
-                        <div
-                          className="absolute pointer-events-none select-none text-gray-800 font-medium whitespace-nowrap"
-                          style={{
-                            left: `${step.textBlockX}%`,
-                            top: `${step.textBlockY}%`,
-                            fontSize: `${step.textBlockSize || 10}px`,
-                            fontFamily: 'THSarabun, sans-serif',
-                            background: 'transparent',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {step.textBlock}
-                        </div>
+                        <DocumentTextOverlay
+                          text={step.textBlock} x={step.textBlockX} y={step.textBlockY}
+                          size={step.textBlockSize || 10} className="pointer-events-none"
+                        />
                       )}
                       {/* Extra text blocks from previous steps */}
                       {step.extraTextBlocks?.map((eb, ei) => (
-                        <div
+                        <DocumentTextOverlay
                           key={ei}
-                          className="absolute pointer-events-none select-none text-gray-800 font-medium whitespace-nowrap"
-                          style={{
-                            left: `${eb.x}%`,
-                            top: `${eb.y}%`,
-                            fontSize: `${eb.size || 10}px`,
-                            fontFamily: 'THSarabun, sans-serif',
-                            background: 'transparent',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {eb.val}
-                        </div>
+                          text={eb.val} x={eb.x} y={eb.y} size={eb.size || 10}
+                          className="pointer-events-none"
+                        />
                       ))}
                       {step.dateBlock && step.dateX !== undefined && step.dateY !== undefined && (
-                        <div
-                          className="absolute pointer-events-none select-none text-gray-800 font-medium whitespace-nowrap"
-                          style={{
-                            left: `${step.dateX}%`,
-                            top: `${step.dateY}%`,
-                            fontSize: `${step.dateSize || 10}px`,
-                            fontFamily: 'THSarabun, sans-serif',
-                            background: 'transparent',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {step.dateBlock}
-                        </div>
+                        <DocumentTextOverlay
+                          text={step.dateBlock} x={step.dateX} y={step.dateY}
+                          size={step.dateSize || 10} className="pointer-events-none"
+                        />
                       )}
                       {step.checkmarkBlock && step.checkmarkX !== undefined && step.checkmarkY !== undefined && (
-                        <div
-                          className="absolute pointer-events-none select-none text-green-700 font-bold"
-                          style={{
-                            left: `${step.checkmarkX}%`,
-                            top: `${step.checkmarkY}%`,
-                            fontSize: `15px`,
-                            lineHeight: 1,
-                          }}
-                        >
-                          {step.checkmarkBlock}
-                        </div>
+                        <DocumentCheckmarkOverlay
+                          x={step.checkmarkX} y={step.checkmarkY} size={step.checkmarkSize || 15}
+                          className="pointer-events-none"
+                        />
                       )}
                     </React.Fragment>
                     );
@@ -847,8 +812,8 @@ export function SignatureAndPlaceModal({
                         draggable={false}
                         onMouseDown={(e) => onMouseDown(e, 'signature', idx)}
                         onTouchStart={(e) => onTouchStart(e, 'signature', idx)}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none mix-blend-multiply border-2 border-dashed ${
-                          idx === 0 ? 'border-green-500/80' : 'border-purple-500/80'
+                        className={`absolute cursor-grab active:cursor-grabbing select-none mix-blend-multiply outline outline-2 outline-dashed ${
+                          idx === 0 ? 'outline-green-500/80' : 'outline-purple-500/80'
                         } rounded`}
                         style={{
                           left: `${sp.x}%`,
@@ -873,63 +838,34 @@ export function SignatureAndPlaceModal({
                   {/* Draggable Text Blocks — all items in textItems */}
                   {(pdfImageUrl || !selectedPdf) && textItems.map((item, idx) =>
                     item.val ? (
-                      <div
+                      <DocumentTextOverlay
                         key={idx}
+                        text={item.val} x={item.pos.x} y={item.pos.y} size={item.size}
                         onMouseDown={(e) => onMouseDown(e, 'text', idx)}
                         onTouchStart={(e) => onTouchStart(e, 'text', idx)}
-                        className="absolute cursor-grab active:cursor-grabbing select-none font-semibold whitespace-nowrap text-gray-800 border border-dashed border-gray-400 bg-transparent rounded"
-                        style={{
-                          left: `${item.pos.x}%`,
-                          top: `${item.pos.y}%`,
-                          fontSize: `${item.size}px`,
-                          fontFamily: 'THSarabun, sans-serif',
-                          lineHeight: 1,
-                          userSelect: 'none',
-                          touchAction: 'none',
-                        }}
-                      >
-                        {item.val}
-                      </div>
+                        className="cursor-grab active:cursor-grabbing outline outline-1 outline-dashed outline-gray-400 rounded"
+                      />
                     ) : null
                   )}
 
                   {/* Draggable Date Block */}
                   {(pdfImageUrl || !selectedPdf) && useDate && dateVal && (
-                    <div
+                    <DocumentTextOverlay
+                      text={dateVal} x={datePos.x} y={datePos.y} size={dateSize}
                       onMouseDown={(e) => onMouseDown(e, 'date', 0)}
                       onTouchStart={(e) => onTouchStart(e, 'date', 0)}
-                      className="absolute cursor-grab active:cursor-grabbing select-none font-semibold whitespace-nowrap text-gray-800 border border-dashed border-gray-400 bg-transparent rounded"
-                      style={{
-                        left: `${datePos.x}%`,
-                        top: `${datePos.y}%`,
-                        fontSize: `${dateSize}px`,
-                        fontFamily: 'THSarabun, sans-serif',
-                        lineHeight: 1,
-                        userSelect: 'none',
-                        touchAction: 'none',
-                      }}
-                    >
-                      {dateVal}
-                    </div>
+                      className="cursor-grab active:cursor-grabbing outline outline-1 outline-dashed outline-gray-400 rounded"
+                    />
                   )}
 
                   {/* Draggable Mark Block */}
                   {(pdfImageUrl || !selectedPdf) && useCheckmark && checkmarkVal && (
-                    <div
+                    <DocumentCheckmarkOverlay
+                      x={checkmarkPos.x} y={checkmarkPos.y}
                       onMouseDown={(e) => onMouseDown(e, 'checkmark')}
                       onTouchStart={(e) => onTouchStart(e, 'checkmark')}
-                      className="absolute cursor-grab active:cursor-grabbing select-none font-bold text-gray-800 bg-transparent border border-dashed border-gray-500 rounded flex items-center justify-center"
-                      style={{
-                        left: `${checkmarkPos.x}%`,
-                        top: `${checkmarkPos.y}%`,
-                        fontSize: `17px`,
-                        lineHeight: 1,
-                        userSelect: 'none',
-                        touchAction: 'none',
-                      }}
-                    >
-                      {checkmarkVal}
-                    </div>
+                      className="cursor-grab active:cursor-grabbing outline outline-1 outline-dashed outline-gray-500 rounded"
+                    />
                   )}
                 </div>
 
