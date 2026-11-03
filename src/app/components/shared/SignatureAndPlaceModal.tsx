@@ -245,28 +245,26 @@ export function SignatureAndPlaceModal({
   // ── Tab ──────────────────────────────────────────────────────
   const [tab, setTab] = useState<'sign' | 'place'>(initialSignature ? 'place' : 'sign');
 
-  // ── PDF selection ────────────────────────────────────────────
-  // Build the full list: student uploads first, then generated PDF
-  const pdfOptions: Array<{ label: string; url: string }> = [
-    ...attachments
-      .filter(a => a.type === 'pdf')
-      .map(a => ({ label: a.name, url: a.url })),
-    ...(extraPdfUrl ? [{ label: extraPdfLabel, url: extraPdfUrl }] : []),
-  ];
-
-  const [selectedPdfIdx, setSelectedPdfIdx] = useState(0);
+  // The first attachment is the petition throughout approval/export. Supporting
+  // PDFs and a generated copy must never become alternate signing targets.
+  const primaryAttachment = attachments[0];
+  const supportingCount = Math.max(0, attachments.length - 1);
+  const selectedPdf = primaryAttachment?.url
+    ? { label: primaryAttachment.name, url: primaryAttachment.url }
+    : attachments.length === 0 && extraPdfUrl
+      ? { label: extraPdfLabel, url: extraPdfUrl }
+      : null;
+  const missingPrimary = attachments.length > 0 && !selectedPdf;
   const [pdfPage, setPdfPage] = useState(() => {
     // Default to page 2 if officer/dean level >= 3, otherwise page 1
     return level >= 3 ? 2 : 1;
   });
 
-  const selectedPdf = pdfOptions[selectedPdfIdx] ?? null;
-
   const { imageUrl: pdfImageUrl, numPages, loading: pdfLoading, error: pdfError } =
     usePdfPageImage(selectedPdf?.url ?? null, pdfPage, selectedPdf?.label);
 
-  // Reset page when switching file
-  useEffect(() => { setPdfPage(1); }, [selectedPdfIdx]);
+  // Keep the existing first-page placement behavior for the chosen petition.
+  useEffect(() => { setPdfPage(1); }, [selectedPdf?.url]);
 
   // Resize signature canvas on mount
   useEffect(() => {
@@ -475,33 +473,24 @@ export function SignatureAndPlaceModal({
           {tab === 'place' && signatureData && (
             <div className="p-3 space-y-3">
 
-              {/* ── PDF File selector (always visible when options exist) ── */}
-              {pdfOptions.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-gray-500 px-0.5">เลือกเอกสารที่ต้องการวางลายเซ็น</p>
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {pdfOptions.map((opt, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setSelectedPdfIdx(i)}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border shrink-0 transition-colors ${
-                          selectedPdfIdx === i
-                            ? 'bg-green-50 border-green-400 text-green-800 shadow-sm'
-                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        <FileText size={12} />
-                        {opt.label}
-                        {selectedPdfIdx === i && <span className="w-1.5 h-1.5 rounded-full bg-green-500 ml-0.5" />}
-                      </button>
-                    ))}
-                  </div>
+              {/* The signing target is fixed; all other attachments stay in the viewer. */}
+              {selectedPdf && (
+                <div className="space-y-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                  <p className="text-xs font-semibold text-green-800 flex items-center gap-1.5">
+                    <FileText size={12} /> คำร้องหลัก · ใช้ลงนาม
+                  </p>
+                  <p className="text-xs text-green-900 break-all">{selectedPdf.label}</p>
+                  <p className="text-[11px] text-green-700">
+                    เอกสารประกอบ {supportingCount} ไฟล์ · เปิดตรวจได้จากหน้าดูเอกสารแนบ การลงนามใช้คำร้องหลักเท่านั้น
+                  </p>
                 </div>
               )}
 
-              {pdfOptions.length === 0 && (
+              {!selectedPdf && (
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  ⚠️ ไม่พบไฟล์ PDF ที่แนบ — จะวางลายเซ็นบนหน้าเปล่า
+                  {missingPrimary
+                    ? 'ไม่พบคำร้องหลักที่เปิดได้ กรุณากลับไปตรวจสอบเอกสารแนบ'
+                    : 'ไม่พบเอกสารคำร้องที่แนบ — จะวางลายเซ็นบนหน้าเปล่า'}
                 </p>
               )}
 
@@ -720,7 +709,7 @@ export function SignatureAndPlaceModal({
                       {pdfImageUrl && (
                         <img
                           src={pdfImageUrl}
-                          alt="เอกสาร PDF"
+                          alt="คำร้องหลัก"
                           className="absolute inset-0 w-full h-full block select-none pointer-events-none object-fill"
                           draggable={false}
                         />
@@ -906,7 +895,7 @@ export function SignatureAndPlaceModal({
           </button>
           <button
             onClick={() => {
-              if (!signatureData) return;
+              if (!signatureData || missingPrimary) return;
               // First text item → textBlock params (backward compat)
               const first = textItems[0];
               const hasFirst = first?.val?.trim();
@@ -935,7 +924,7 @@ export function SignatureAndPlaceModal({
                 pdfPage
               );
             }}
-            disabled={!signatureData || tab !== 'place'}
+            disabled={!signatureData || tab !== 'place' || missingPrimary}
             className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Check size={15} /> ยืนยันและอนุมัติ

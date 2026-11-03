@@ -376,7 +376,12 @@ function SubmissionCard({ sub }: { sub: Submission }) {
               <p className="text-xs font-medium text-gray-600 mb-2">เอกสารแนบ</p>
               <div className="space-y-1.5">
                 {sub.attachments.map((file, i) => (
-                  <AttachmentLink key={i} file={file} />
+                  <div key={i} className="space-y-1">
+                    <span className={`text-xs font-medium ${i === 0 ? 'text-green-700' : 'text-gray-500'}`}>
+                      {i === 0 ? 'คำร้องหลัก · ใช้ลงนาม' : 'เอกสารประกอบ'}
+                    </span>
+                    <AttachmentLink file={file} />
+                  </div>
                 ))}
               </div>
             </div>

@@ -16,9 +16,14 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
-  const [cachedUrl, setCachedUrl] = useState<string>('');
+  const [cachedFile, setCachedFile] = useState({ source: '', url: '' });
 
-  const current = attachments[selectedIndex];
+  const currentIndex = Math.min(selectedIndex, Math.max(0, attachments.length - 1));
+  const current = attachments[currentIndex];
+  // A cache result belongs to one attachment. Never reuse the previous file's
+  // URL while a different attachment is resolving.
+  const cachedUrl = cachedFile.source === current?.url ? cachedFile.url : '';
+  const currentRole = currentIndex === 0 ? 'คำร้องหลัก · ใช้ลงนาม' : 'เอกสารประกอบ';
 
   useEffect(() => {
     let active = true;
@@ -27,13 +32,13 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
       getCachedFileUrl(current.url)
         .then((resolvedUrl) => {
           if (active) {
-            setCachedUrl(resolvedUrl);
+            setCachedFile({ source: current.url, url: resolvedUrl });
           }
         })
         .catch((err) => {
           console.error('Failed to load cached URL', err);
           if (active) {
-            setCachedUrl(current.url);
+            setCachedFile({ source: current.url, url: current.url });
           }
         });
     }
@@ -41,6 +46,17 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
       active = false;
     };
   }, [current?.url]);
+
+  if (!current) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="rounded-2xl bg-white p-6 text-sm text-gray-600">
+          <p>ไม่พบเอกสารแนบ</p>
+          <button onClick={onClose} className="mt-4 rounded-lg border px-3 py-1.5">ปิด</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -79,12 +95,16 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
                   <button
                     key={i}
                     onClick={() => { setSelectedIndex(i); setLoading(true); }}
-                    className={`w-full text-left flex items-start gap-2.5 px-3 py-2.5 rounded-lg text-xs transition-all ${i === selectedIndex ? 'bg-green-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm'}`}
+                    aria-label={`${i === 0 ? 'คำร้องหลัก · ใช้ลงนาม' : 'เอกสารประกอบ'}: ${file.name}`}
+                    className={`w-full text-left flex items-start gap-2.5 px-3 py-2.5 rounded-lg text-xs transition-all ${i === currentIndex ? 'bg-green-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:shadow-sm'}`}
                   >
-                    <FileText size={14} className={`shrink-0 mt-0.5 ${i === selectedIndex ? 'text-white' : 'text-green-600'}`} />
+                    <FileText size={14} className={`shrink-0 mt-0.5 ${i === currentIndex ? 'text-white' : 'text-green-600'}`} />
                     <div className="min-w-0">
                       <p className="truncate font-medium leading-tight">{file.name}</p>
-                      <p className={`text-xs mt-0.5 ${i === selectedIndex ? 'text-green-100' : 'text-gray-400'}`}>{file.size}</p>
+                      <p className={`text-[10px] mt-1 ${i === currentIndex ? 'text-green-100' : 'text-green-700'}`}>
+                        {i === 0 ? 'คำร้องหลัก · ใช้ลงนาม' : 'เอกสารประกอบ'}
+                      </p>
+                      <p className={`text-xs mt-0.5 ${i === currentIndex ? 'text-green-100' : 'text-gray-400'}`}>{file.size}</p>
                     </div>
                   </button>
                 ))}
@@ -98,23 +118,26 @@ export function PdfViewerModal({ attachments, submissionName, studentName, submi
               <div className="flex items-center gap-2">
                 {attachments.length > 1 && (
                   <>
-                    <button onClick={() => { setSelectedIndex(i => Math.max(0, i - 1)); setLoading(true); }} disabled={selectedIndex === 0} className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30">
+                    <button onClick={() => { setSelectedIndex(Math.max(0, currentIndex - 1)); setLoading(true); }} disabled={currentIndex === 0} className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30">
                       <ChevronLeft size={16} />
                     </button>
-                    <span className="text-xs text-gray-500">{selectedIndex + 1} / {attachments.length}</span>
-                    <button onClick={() => { setSelectedIndex(i => Math.min(attachments.length - 1, i + 1)); setLoading(true); }} disabled={selectedIndex === attachments.length - 1} className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30">
+                    <span className="text-xs text-gray-500">{currentIndex + 1} / {attachments.length}</span>
+                    <button onClick={() => { setSelectedIndex(Math.min(attachments.length - 1, currentIndex + 1)); setLoading(true); }} disabled={currentIndex === attachments.length - 1} className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30">
                       <ChevronRight size={16} />
                     </button>
                   </>
                 )}
                 <span className="text-xs font-medium text-gray-700 ml-1">{current.name}</span>
+                <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${currentIndex === 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                  {currentRole}
+                </span>
                 <span className="text-xs text-gray-400">• {current.size}</span>
               </div>
               <div className="flex gap-2">
                 <a href={cachedUrl || current.url} download={current.name} className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 bg-gray-100 px-3 py-1.5 rounded-lg transition-colors">
                   <Download size={13} /> ดาวน์โหลดต้นฉบับ
                 </a>
-                {submission && current.type === 'pdf' && (
+                {submission && currentIndex === 0 && current.type === 'pdf' && (
                   <button
                     onClick={() => generateSignedAttachmentPDF(submission, cachedUrl || current.url, current.name)}
                     className="flex items-center gap-1.5 text-xs text-green-700 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors"
