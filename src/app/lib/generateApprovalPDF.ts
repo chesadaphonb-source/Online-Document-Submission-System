@@ -580,7 +580,7 @@ async function drawSignaturesAndTexts(doc: jsPDF, submission: Submission, pageNu
 /**
  * Resolves attachment blob with automatic fallback to template PDF if original URL is unreachable/offline.
  */
-async function resolveAttachmentBlob(submission: Submission, sourceUrl: string): Promise<{ blob: Blob; isFallback: boolean }> {
+async function resolveAttachmentBlob(submission: Submission, sourceUrl: string, allowTemplateFallback = true): Promise<{ blob: Blob; isFallback: boolean }> {
   if (sourceUrl.startsWith('blob:') || sourceUrl.startsWith('data:')) {
     const res = await fetch(sourceUrl);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
@@ -591,6 +591,11 @@ async function resolveAttachmentBlob(submission: Submission, sourceUrl: string):
     const blob = await getCachedFileBlob(sourceUrl);
     return { blob, isFallback: false };
   } catch (err) {
+    // Saving an adjusted document must use its actual source. A template can
+    // contain different fields and cannot replace the student's document.
+    if (!allowTemplateFallback) {
+      throw new Error('เปิดเอกสารต้นฉบับไม่ได้ จึงยังบันทึกตำแหน่งใหม่ไม่ได้', { cause: err });
+    }
     console.warn(`[generateApprovalPDF] Failed to fetch attachment from ${sourceUrl}. Attempting template fallback...`, err);
     
     // Check if we can find a matching template PDF from public/templates
@@ -778,7 +783,7 @@ export async function generateAdjustedPDFBlob(
   doc.addFont('THSarabun.ttf', 'THSarabun', 'normal');
   doc.addFont('THSarabun.ttf', 'THSarabun', 'bold');
 
-  const { blob: sourceBlob } = await resolveAttachmentBlob(submission, attachmentUrl);
+  const { blob: sourceBlob } = await resolveAttachmentBlob(submission, attachmentUrl, false);
 
   if (isImage && !sourceBlob.type.includes('pdf')) {
     const imgDataUrl = URL.createObjectURL(sourceBlob);

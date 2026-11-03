@@ -5,9 +5,15 @@ import { useSubmissions } from '../../context/SubmissionsContext';
 import { formTemplates, FormTemplate, mockStudents, Submission, ApprovalStep, Attachment } from '../../data/mockData';
 import { supabase, isSupabaseConfigured, supabaseStorage } from '../../lib/supabase';
 import { formatMoney } from '../../lib/exportUtils';
+import { AttachmentUploadFields, AttachmentReview, type AttachmentUploadRole } from './AttachmentUploadFields';
 import {
-  ChevronRight, ChevronLeft, Check, FileText, Upload,
-  AlertCircle, Paperclip, X, Search, Save, Trash2,
+  createAttachmentSelection, restoreAttachmentSelection, getDraftAttachments, getSubmissionAttachments,
+  setPrimaryAttachment, addSupportingAttachments, removeSupportingAttachment, promoteSupportingAttachment,
+  type AttachmentSelection,
+} from '../../lib/submissionAttachments';
+import {
+  ChevronRight, ChevronLeft, Check, FileText,
+  AlertCircle, Paperclip, Search, Save, Trash2,
   Download, ChevronDown, ChevronUp, BookOpen
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -218,6 +224,7 @@ interface DraftData {
   formId: string;
   formData: Record<string, string>;
   attachments: Attachment[];
+  attachmentSelection?: AttachmentSelection;
   savedAt: string;
 }
 
@@ -232,8 +239,11 @@ export function SubmitForm() {
   const [selectedForm, setSelectedForm] = useState<FormTemplate | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [uploadingFile, setUploadingFile] = useState(false);
+  const [attachmentSelection, setAttachmentSelection] = useState<AttachmentSelection>(() => createAttachmentSelection());
+  const attachments = getDraftAttachments(attachmentSelection);
+  const [uploadingRole, setUploadingRole] = useState<AttachmentUploadRole | null>(null);
+  const uploadingFile = uploadingRole !== null;
+  const uploadInProgress = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -252,7 +262,6 @@ export function SubmitForm() {
   );
   const [draftInfo, setDraftInfo] = useState<DraftData | null>(null);
   const [libraryForms, setLibraryForms] = useState<LibraryForm[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [advisorList, setAdvisorList] = useState<{
     id: string;
     name: string;
@@ -324,6 +333,7 @@ export function SubmitForm() {
 
   // ── บันทึกร่าง
   const handleSaveDraft = () => {
+    if (uploadInProgress.current || isSubmitting) return;
     if (!currentUser || !selectedForm) {
       toast.error('กรุณาเลือกประเภทคำร้องก่อนบันทึกร่าง');
       return;
@@ -332,6 +342,7 @@ export function SubmitForm() {
       formId: selectedForm.id,
       formData,
       attachments,
+      attachmentSelection,
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(getDraftKey(currentUser.id), JSON.stringify(draft));
@@ -342,12 +353,13 @@ export function SubmitForm() {
 
   // ── โหลดร่าง
   const handleLoadDraft = () => {
+    if (uploadInProgress.current || isSubmitting) return;
     if (!draftInfo) return;
     const form = formTemplates.find(f => f.id === draftInfo.formId);
     if (!form) { toast.error('ไม่พบประเภทคำร้องในร่าง'); return; }
     setSelectedForm(form);
     setFormData(draftInfo.formData);
-    setAttachments(draftInfo.attachments);
+    setAttachmentSelection(restoreAttachmentSelection(draftInfo));
     setHasDraft(false); // ซ่อน banner หลังโหลดแล้ว
     setCurrentStep(1); // ข้ามไปขั้นตอนกรอกข้อมูลเลย
     toast.success(`โหลดร่าง "${form.name}" เรียบร้อยแล้ว`);
@@ -355,6 +367,7 @@ export function SubmitForm() {
 
   // ── ลบร่าง
   const handleDeleteDraft = () => {
+    if (uploadInProgress.current || isSubmitting) return;
     if (!currentUser) return;
     localStorage.removeItem(getDraftKey(currentUser.id));
     setHasDraft(false);
@@ -467,6 +480,7 @@ export function SubmitForm() {
   };
 
   const handleNext = () => {
+    if (uploadInProgress.current) { toast.info('กรุณารอให้อัปโหลดเอกสารเสร็จก่อน'); return; }
     if (currentStep === 0 && !validateStep1()) {
       toast.error('กรุณาเลือกแบบฟอร์ม');
       return;
@@ -475,8 +489,8 @@ export function SubmitForm() {
       toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
-    if (currentStep === 2 && attachments.length === 0) {
-      toast.error('กรุณาแนบเอกสารหลักฐานอย่างน้อย 1 ไฟล์');
+    if (currentStep === 2 && attachmentSelection.primary?.type !== 'pdf') {
+      toast.error('กรุณาเลือกคำร้องหลักสำหรับลงนาม 1 ไฟล์');
       return;
     }
     setCurrentStep(prev => prev + 1);
@@ -489,11 +503,14 @@ export function SubmitForm() {
     if (errors[fieldId]) setErrors(prev => ({ ...prev, [fieldId]: '' }));
   };
 
-  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setUploadingFile(true);
+  const handleFilesSelected = async (files: File[], role: AttachmentUploadRole) => {
+    if (uploadInProgress.current || !files.length) return;
+    if (role === 'primary' && files.length !== 1) {
+      toast.error('คำร้องหลักสำหรับลงนามต้องเป็น PDF 1 ไฟล์');
+      return;
+    }
+    uploadInProgress.current = true;
+    setUploadingRole(role);
     try {
       for (const file of Array.from(files)) {
         if (file.size > 20 * 1024 * 1024) { toast.error(`${file.name} เกิน 20MB`); continue; }
@@ -506,14 +523,16 @@ export function SubmitForm() {
 
         const { url, name, size } = await uploadFileToSupabase(file);
         const att: Attachment = { name, url, type: 'pdf', size };
-        setAttachments(prev => [...prev, att]);
+        setAttachmentSelection(prev => role === 'primary'
+          ? setPrimaryAttachment(prev, att)
+          : addSupportingAttachments(prev, [att]));
         toast.success(`เพิ่ม ${name} สำเร็จ`);
       }
     } catch (err: any) {
       toast.error('อัปโหลดไม่สำเร็จ: ' + (err.message || 'ไม่ทราบสาเหตุ'));
     } finally {
-      setUploadingFile(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      uploadInProgress.current = false;
+      setUploadingRole(null);
     }
   };
 
@@ -554,9 +573,12 @@ export function SubmitForm() {
 
   const handleSubmit = async () => {
     if (!selectedForm || !currentUser) return;
-
-    if (attachments.length === 0) {
-      toast.error('กรุณาแนบเอกสารหลักฐานอย่างน้อย 1 ไฟล์');
+    if (uploadInProgress.current) { toast.info('กรุณารอให้อัปโหลดเอกสารเสร็จก่อน'); return; }
+    let submissionAttachments: Attachment[];
+    try {
+      submissionAttachments = getSubmissionAttachments(attachmentSelection);
+    } catch {
+      toast.error('กรุณาเลือกคำร้องหลักสำหรับลงนามเป็น PDF 1 ไฟล์');
       return;
     }
 
@@ -696,7 +718,7 @@ export function SubmitForm() {
       formData,
       semester,
       academicYear: thaiYear,
-      attachments: attachments.length > 0 ? attachments : undefined,
+      attachments: submissionAttachments,
     };
 
     addSubmission(newSub);
@@ -730,10 +752,10 @@ export function SubmitForm() {
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <button onClick={handleLoadDraft} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs transition-all">
+            <button onClick={handleLoadDraft} disabled={uploadingFile || isSubmitting} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs transition-all disabled:opacity-40">
               โหลดร่าง
             </button>
-            <button onClick={handleDeleteDraft} className="px-3 py-1.5 text-amber-700 hover:bg-amber-100 rounded-lg text-xs transition-all flex items-center gap-1">
+            <button onClick={handleDeleteDraft} disabled={uploadingFile || isSubmitting} className="px-3 py-1.5 text-amber-700 hover:bg-amber-100 rounded-lg text-xs transition-all flex items-center gap-1 disabled:opacity-40">
               <Trash2 size={12} /> ลบ
             </button>
           </div>
@@ -984,8 +1006,8 @@ export function SubmitForm() {
         {/* Step 2: Attachments */}
         {currentStep === 2 && (
           <div className="p-5">
-            <h3 className="text-green-800 mb-1">แนบเอกสารประกอบ</h3>
-            <p className="text-gray-500 text-sm mb-4">แนบเอกสารหลักฐานประกอบคำร้อง (เฉพาะไฟล์ PDF, สูงสุด 20MB/ไฟล์)</p>
+            <h3 className="text-green-800 mb-1">แนบคำร้องหลักและเอกสารประกอบ</h3>
+            <p className="text-gray-500 text-sm mb-4">แยกไฟล์สำหรับลงนามออกจากหลักฐานเพิ่มเติม (PDF สูงสุด 20 MB ต่อไฟล์)</p>
 
             {/* Instruction Manual / Naming Guideline */}
             <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl">
@@ -1003,7 +1025,7 @@ export function SubmitForm() {
               </p>
               <ul className="list-disc list-inside text-xs text-blue-800 space-y-1">
                 <li>ระบบบังคับให้ส่งเอกสารเฉพาะไฟล์ <strong>PDF (.pdf)</strong> เท่านั้น</li>
-                <li><strong>ข้อสำคัญ:</strong> กรุณาตั้งชื่อไฟล์ให้ตรงตามชื่อแบบฟอร์มคำร้อง (เช่น <code>{selectedForm?.name || 'KU1-Registration-Form'}.pdf</code>) เพื่อให้ระบบจดจำตำแหน่งและประมวลผลลายเซ็นได้ถูกต้อง</li>
+                <li>กรุณาตั้งชื่อไฟล์ให้ตรงตามชื่อแบบฟอร์มคำร้อง (เช่น <code>{selectedForm?.name || 'KU1-Registration-Form'}.pdf</code>) เพื่อให้ผู้ตรวจสอบระบุเอกสารได้สะดวก</li>
               </ul>
             </div>
 
@@ -1024,58 +1046,14 @@ export function SubmitForm() {
               </div>
             )}
 
-            {/* Upload area */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pdf"
-              onChange={handleFileSelected}
-              className="hidden"
+            <AttachmentUploadFields
+              selection={attachmentSelection}
+              uploadingRole={uploadingRole}
+              onFilesSelected={handleFilesSelected}
+              onRemovePrimary={() => setAttachmentSelection(prev => setPrimaryAttachment(prev, null))}
+              onRemoveSupporting={index => setAttachmentSelection(prev => removeSupportingAttachment(prev, index))}
+              onPromoteSupporting={index => setAttachmentSelection(prev => promoteSupportingAttachment(prev, index))}
             />
-            <div
-              onClick={() => !uploadingFile && fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl p-8 text-center transition-all mb-4 ${
-                uploadingFile ? 'border-green-300 bg-green-50 cursor-wait' : 'border-green-200 cursor-pointer hover:border-green-400 hover:bg-green-50'
-              }`}
-            >
-              {uploadingFile ? (
-                <>
-                  <div className="w-8 h-8 border-3 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-green-600">กำลังอัปโหลด...</p>
-                </>
-              ) : (
-                <>
-                  <Upload size={32} className="mx-auto text-green-400 mb-3" />
-                  <p className="text-sm text-gray-600 mb-1">คลิกเพื่ออัปโหลดไฟล์</p>
-                  <p className="text-xs text-gray-400">รองรับเฉพาะไฟล์ PDF (สูงสุด 20MB)</p>
-                </>
-              )}
-            </div>
-
-            {attachments.length > 0 ? (
-              <div className="space-y-2">
-                {attachments.map((file, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <Paperclip size={16} className="text-green-600 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-700 truncate">{file.name}</p>
-                      <p className="text-xs text-gray-400">{file.size}</p>
-                    </div>
-                    <button
-                      onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                      className="text-red-400 hover:text-red-600 shrink-0"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-sm text-amber-600 py-4 font-medium flex items-center justify-center gap-1.5 bg-amber-50 rounded-lg border border-amber-100">
-                <AlertCircle size={16} className="shrink-0" /> ยังไม่มีเอกสารแนบ (จำเป็นต้องแนบอย่างน้อย 1 ไฟล์)
-              </p>
-            )}
           </div>
         )}
 
@@ -1181,20 +1159,7 @@ export function SubmitForm() {
                 );
               })()}
 
-              {/* Attachments */}
-              {attachments.length > 0 && (
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <p className="text-xs text-gray-600 font-medium mb-2">เอกสารแนบ ({attachments.length} ไฟล์)</p>
-                  <div className="flex flex-wrap gap-2">
-                    {attachments.map((file, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 text-xs bg-white px-2 py-1 rounded border border-gray-200">
-                        <Paperclip size={10} className="text-green-600" /> {file.name}
-                        <span className="text-gray-400">({file.size})</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <AttachmentReview selection={attachmentSelection} />
             </div>
           </div>
         )}
@@ -1203,7 +1168,7 @@ export function SubmitForm() {
         <div className="px-5 py-4 border-t border-gray-100 flex justify-between items-center">
           <button
             onClick={handleBack}
-            disabled={currentStep === 0}
+            disabled={currentStep === 0 || uploadingFile || isSubmitting}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             <ChevronLeft size={16} /> ย้อนกลับ
@@ -1214,6 +1179,7 @@ export function SubmitForm() {
             {currentStep >= 1 && (
               <button
                 onClick={handleSaveDraft}
+                disabled={uploadingFile || isSubmitting}
                 className="flex items-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-lg text-sm transition-all"
               >
                 <Save size={15} /> บันทึกร่าง
@@ -1223,6 +1189,7 @@ export function SubmitForm() {
             {currentStep < steps.length - 1 ? (
               <button
                 onClick={handleNext}
+                disabled={uploadingFile}
                 className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-all"
               >
                 ถัดไป <ChevronRight size={16} />
@@ -1230,7 +1197,7 @@ export function SubmitForm() {
             ) : (
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || uploadingFile}
                 className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg text-sm transition-all"
               >
                 {isSubmitting ? (

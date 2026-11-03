@@ -1,0 +1,11 @@
+# Keep local previews, private rollback artifacts and credentials out of uploads.
+tmp/
+output/
+demo/
+node_modules/
+.git/
+.env*
+scratch/
+scripts/build-admin-offline-demo.js
+scripts/generate-admin-demo-fixtures.js
+tests/admin-demo-safety.test.js

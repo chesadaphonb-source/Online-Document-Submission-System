@@ -317,14 +317,17 @@ function SubmissionRow({ sub }: { sub: Submission }) {
       )}
       {adjustOpen && (
         <AdminAdjustSignaturesModal
+          key={sub.id}
           submission={sub}
           onClose={() => setAdjustOpen(false)}
-          onSave={async (updatedSteps, targetSubmissionIds) => {
-            await updateSignaturePositions(sub.id, sub.formType, updatedSteps, targetSubmissionIds, currentUser?.name || currentUser?.email || 'Super Admin');
+          onSave={async (updatedSteps, targetSubmissionIds, sourceSubmission) => {
+            const saved = await updateSignaturePositions(sub.id, sub.formType, updatedSteps, targetSubmissionIds, currentUser?.name || currentUser?.email || 'Admin', sourceSubmission);
+            if (!saved) return false;
             if (signedPreviewUrl) {
               URL.revokeObjectURL(signedPreviewUrl);
               setSignedPreviewUrl(null);
             }
+            return true;
           }}
         />
       )}

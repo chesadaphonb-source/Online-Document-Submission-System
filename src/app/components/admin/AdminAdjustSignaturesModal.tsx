@@ -1,9 +1,13 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Move, Check, X, Loader2, Plus, Calendar, Type } from 'lucide-react';
 import type { Submission, ApprovalStep } from '../../data/mockData';
 import { toast } from 'sonner';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { getCachedFileBlob } from '../../lib/fileCache';
+import { DocumentTextOverlay, DocumentCheckmarkOverlay, loadDocumentPreviewFont } from '../shared/DocumentTextOverlay';
+import { AdminPlacementToolbar } from './AdminPlacementToolbar';
+import { useAdminPlacement } from './useAdminPlacement';
+import { percentToMm } from '../../lib/adminPlacement.js';
 
 // Helper to generate Thai Buddhist Era date string
 function getThaiDateString(sep = '/') {
@@ -117,52 +121,42 @@ function usePdfPageImage(url: string | null, pageNum: number, fileName?: string)
 interface AdminAdjustSignaturesModalProps {
   submission: Submission;
   onClose: () => void;
-  onSave: (updatedSteps: ApprovalStep[], targetSubmissionIds: string[]) => void | Promise<void>;
-}
-
-interface DraggableItem {
-  level: number;
-  type: 'signature' | 'checkmark' | 'date' | 'text' | 'extraSignature' | 'extraText';
-  extraIndex?: number;
+  onSave: (updatedSteps: ApprovalStep[], targetSubmissionIds: string[], sourceSubmission?: Submission) => boolean | void | Promise<boolean | void>;
 }
 
 export function AdminAdjustSignaturesModal({
-  submission,
+  submission: latestSubmission,
   onClose,
   onSave,
 }: AdminAdjustSignaturesModalProps) {
+  // The opening version is the one being edited. A later context refresh must
+  // not silently turn this editor into an overwrite of someone else's changes.
+  const submission = useRef(latestSubmission).current;
   const [pageNum, setPageNum] = useState(1);
-  const [steps, setSteps] = useState<ApprovalStep[]>(() => JSON.parse(JSON.stringify(submission.approvalSteps)));
-  const [selectedSubIds, setSelectedSubIds] = useState<string[]>([]);
-  const [otherActiveSubmissions, setOtherActiveSubmissions] = useState<any[]>([]);
-  const [showOtherSubsList, setShowOtherSubsList] = useState(false);
-  const [loadingOthers, setLoadingOthers] = useState(false);
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const [fontReady, setFontReady] = useState(false);
+  const [fontError, setFontError] = useState(false);
   const [dbSignatures, setDbSignatures] = useState<Record<string, string>>({});
+  const attach = submission.attachments?.[0];
+  const sourceUrl = submission.originalAttachmentUrl || attach?.url || null;
+  const { imageUrl, numPages, loading: pdfLoading, error: pdfError } = usePdfPageImage(sourceUrl, pageNum, attach?.name);
+  const blocked = saving || pdfLoading || !!pdfError || !imageUrl || !fontReady || fontError;
+  const precision = useAdminPlacement(submission.approvalSteps, blocked, pageNum);
+  const {
+    steps, setSteps, pageContainerRef, dialogRef, scrollAreaRef,
+    onPointerDown, onPointerMove, finishDrag, onDialogKeyDown,
+    selectedItem, selectedKey, selectedPosition, choices, itemKey,
+    zoom, setZoom, pageBaseWidth, pageWidth, showGuides, setShowGuides,
+  } = precision;
+  const invalidPage = steps.some(step => !Number.isInteger(step.page ?? 1) || (step.page ?? 1) < 1 || (step.page ?? 1) > numPages);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-    (async () => {
-      setLoadingOthers(true);
-      try {
-        const { data, error } = await supabase
-          .from('submissions')
-          .select('id, student_name, department, created_at')
-          .eq('form_type', submission.formType)
-          .neq('status', 'approved')
-          .neq('status', 'rejected')
-          .neq('id', submission.id)
-          .order('created_at', { ascending: false });
-        if (data && !error) {
-          setOtherActiveSubmissions(data || []);
-        }
-      } catch (err) {
-        console.error('Failed to load other active submissions:', err);
-      } finally {
-        setLoadingOthers(false);
-      }
-    })();
-  }, [submission]);
+    let active = true;
+    loadDocumentPreviewFont().then(() => { if (active) setFontReady(true); })
+      .catch(() => { if (active) setFontError(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -222,147 +216,6 @@ export function AdminAdjustSignaturesModal({
     })();
   }, [submission]);
   
-  const pageContainerRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
-  const draggingItem = useRef<DraggableItem | null>(null);
-
-  const attach = submission.attachments?.[0];
-  const sourceUrl = submission.originalAttachmentUrl || attach?.url || null;
-  const { imageUrl, numPages, loading: pdfLoading, error: pdfError } = usePdfPageImage(sourceUrl, pageNum, attach?.name);
-
-  const getPagePos = useCallback((clientX: number, clientY: number, sizeWidthPercent: number) => {
-    if (!pageContainerRef.current) return null;
-    const rect = pageContainerRef.current.getBoundingClientRect();
-    const relX = ((clientX - dragOffset.current.x - rect.left) / rect.width) * 100;
-    const relY = ((clientY - dragOffset.current.y - rect.top) / rect.height) * 100;
-    return {
-      x: Math.max(0, Math.min(100 - sizeWidthPercent, relX)),
-      y: Math.max(0, Math.min(95, relY)),
-    };
-  }, []);
-
-  const onMouseDown = (
-    e: React.MouseEvent<HTMLElement>,
-    level: number,
-    type: DraggableItem['type'],
-    extraIndex?: number
-  ) => {
-    e.preventDefault();
-    const elem = e.currentTarget.getBoundingClientRect();
-    dragOffset.current = { x: e.clientX - elem.left, y: e.clientY - elem.top };
-    dragging.current = true;
-    draggingItem.current = { level, type, extraIndex };
-
-    const step = steps.find(s => s.level === level);
-    const activeWidth = type === 'signature' || type === 'extraSignature' ? (step?.signatureSize || 12) : 10;
-
-    const onMove = (ev: MouseEvent) => {
-      if (!dragging.current || !draggingItem.current) return;
-      const p = getPagePos(ev.clientX, ev.clientY, activeWidth);
-      if (p) {
-        setSteps(prev => prev.map(s => {
-          if (s.level === level) {
-            if (type === 'signature') {
-              return { ...s, signatureX: p.x, signatureY: p.y };
-            }
-            if (type === 'checkmark') {
-              return { ...s, checkmarkX: p.x, checkmarkY: p.y };
-            }
-            if (type === 'date') {
-              return { ...s, dateX: p.x, dateY: p.y };
-            }
-            if (type === 'text') {
-              return { ...s, textBlockX: p.x, textBlockY: p.y };
-            }
-            if (type === 'extraSignature' && extraIndex !== undefined && s.extraSignaturePositions) {
-              const newExtras = [...s.extraSignaturePositions];
-              newExtras[extraIndex] = { x: p.x, y: p.y };
-              return { ...s, extraSignaturePositions: newExtras };
-            }
-            if (type === 'extraText' && extraIndex !== undefined && s.extraTextBlocks) {
-              const newExtras = [...s.extraTextBlocks];
-              newExtras[extraIndex] = { ...newExtras[extraIndex], x: p.x, y: p.y };
-              return { ...s, extraTextBlocks: newExtras };
-            }
-          }
-          return s;
-        }));
-      }
-    };
-
-    const onUp = () => {
-      dragging.current = false;
-      draggingItem.current = null;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  };
-
-  const onTouchStart = (
-    e: React.TouchEvent<HTMLElement>,
-    level: number,
-    type: DraggableItem['type'],
-    extraIndex?: number
-  ) => {
-    const touch = e.touches[0];
-    const elem = e.currentTarget.getBoundingClientRect();
-    dragOffset.current = { x: touch.clientX - elem.left, y: touch.clientY - elem.top };
-    dragging.current = true;
-    draggingItem.current = { level, type, extraIndex };
-
-    const step = steps.find(s => s.level === level);
-    const activeWidth = type === 'signature' || type === 'extraSignature' ? (step?.signatureSize || 12) : 10;
-
-    const onMove = (ev: TouchEvent) => {
-      if (!dragging.current || !draggingItem.current) return;
-      const t = ev.touches[0];
-      const p = getPagePos(t.clientX, t.clientY, activeWidth);
-      if (p) {
-        setSteps(prev => prev.map(s => {
-          if (s.level === level) {
-            if (type === 'signature') {
-              return { ...s, signatureX: p.x, signatureY: p.y };
-            }
-            if (type === 'checkmark') {
-              return { ...s, checkmarkX: p.x, checkmarkY: p.y };
-            }
-            if (type === 'date') {
-              return { ...s, dateX: p.x, dateY: p.y };
-            }
-            if (type === 'text') {
-              return { ...s, textBlockX: p.x, textBlockY: p.y };
-            }
-            if (type === 'extraSignature' && extraIndex !== undefined && s.extraSignaturePositions) {
-              const newExtras = [...s.extraSignaturePositions];
-              newExtras[extraIndex] = { x: p.x, y: p.y };
-              return { ...s, extraSignaturePositions: newExtras };
-            }
-            if (type === 'extraText' && extraIndex !== undefined && s.extraTextBlocks) {
-              const newExtras = [...s.extraTextBlocks];
-              newExtras[extraIndex] = { ...newExtras[extraIndex], x: p.x, y: p.y };
-              return { ...s, extraTextBlocks: newExtras };
-            }
-          }
-          return s;
-        }));
-      }
-    };
-
-    const onEnd = () => {
-      dragging.current = false;
-      draggingItem.current = null;
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onEnd);
-    };
-
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onEnd);
-  };
-
   const handleSizeChange = (level: number, newSize: number) => {
     setSteps(prev => prev.map(s => s.level === level ? { ...s, signatureSize: newSize } : s));
   };
@@ -515,15 +368,23 @@ export function AdminAdjustSignaturesModal({
   };
 
   const handleSave = async () => {
+    if (blocked || saveLock.current) return;
+    if (invalidPage) {
+      toast.error('กรุณาเลือกหน้าเอกสารที่มีอยู่จริงให้ครบก่อนบันทึก');
+      return;
+    }
+    finishDrag();
+    saveLock.current = true;
     setSaving(true);
     try {
-      await onSave(steps, selectedSubIds);
+      if (await onSave(precision.historyRef.current.present, [], submission) === false) return;
       toast.success('บันทึกปรับปรุงตำแหน่งลายเซ็นเรียบร้อยแล้ว');
       onClose();
     } catch (err) {
       console.error('Save failed:', err);
       toast.error('เกิดข้อผิดพลาดระหว่างบันทึก');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   };
@@ -534,25 +395,40 @@ export function AdminAdjustSignaturesModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-gray-900/70 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-5xl h-[94vh]">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ปรับตำแหน่งลายเซ็น"
+        tabIndex={-1} onKeyDown={onDialogKeyDown}
+        className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-5xl h-[94vh] focus:outline-none">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
           <div>
             <h3 className="text-[#1a5c2e] text-base font-semibold flex items-center gap-2">
-              <Move size={18} /> ปรับแก้ตำแหน่งลายเซ็นอาจารย์ (Super Admin)
+              <Move size={18} /> ปรับตำแหน่งลายเซ็นและข้อความ
             </h3>
             <p className="text-gray-500 text-xs mt-0.5">{submission.formName} — {submission.studentName}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+          <button aria-label="Close" onClick={onClose} disabled={saving} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40">
             <X size={18} />
           </button>
         </div>
+
+        <AdminPlacementToolbar
+          choices={choices} selectedKey={selectedKey}
+          onSelect={key => precision.setSelectedItem(choices.find(choice => choice.key === key)?.item || null)}
+          xMm={selectedPosition ? percentToMm(selectedPosition.x, 'x') : null}
+          yMm={selectedPosition ? percentToMm(selectedPosition.y, 'y') : null}
+          onCoordinate={precision.setCoordinate} onNudge={precision.nudge}
+          onUndo={precision.undo} onRedo={precision.redo}
+          canUndo={precision.canUndo} canRedo={precision.canRedo}
+          zoom={zoom} onZoom={setZoom} showGuides={showGuides} onShowGuides={setShowGuides}
+          disabled={blocked}
+        />
 
         {/* Content Body */}
         <div className="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0">
           
           {/* Left Sidebar: Controls */}
-          <div className="w-full md:w-80 border-r border-gray-100 p-4 overflow-y-auto space-y-4 shrink-0 bg-gray-50/50">
+          <fieldset disabled={blocked} aria-label="Annotation details"
+            className="w-full md:w-80 min-w-0 border-r border-gray-100 p-4 overflow-y-auto space-y-4 shrink-0 bg-gray-50/50">
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 space-y-1.5">
               <p className="font-semibold flex items-center gap-1">💡 คำแนะนำ:</p>
               <ul className="list-disc pl-4 space-y-1">
@@ -578,17 +454,21 @@ export function AdminAdjustSignaturesModal({
                       </span>
                     </div>
 
-                    {numPages > 1 && (
+                    {imageUrl && (
                       <div className="flex items-center justify-between text-[11px] border-t border-gray-100 pt-1.5 mt-1">
                         <span className="text-gray-400 font-medium">แสตมป์ลงบนหน้า:</span>
                         <select
-                          value={step.page || 1}
+                          aria-label={`Page for level ${step.level}`}
+                          value={step.page ?? 1}
                           onChange={e => {
                             const val = Number(e.target.value);
                             setSteps(prev => prev.map(s => s.level === step.level ? { ...s, page: val } : s));
                           }}
                           className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 bg-white font-semibold text-gray-700 focus:outline-none focus:border-[#1a5c2e]"
                         >
+                          {((step.page ?? 1) > numPages || (step.page ?? 1) < 1) && (
+                            <option value={step.page} disabled>หน้า {step.page} (ไม่พบในเอกสาร)</option>
+                          )}
                           {Array.from({ length: numPages }, (_, i) => (
                             <option key={i + 1} value={i + 1}>หน้า {i + 1}</option>
                           ))}
@@ -871,14 +751,17 @@ export function AdminAdjustSignaturesModal({
                 </div>
               </div>
             )}
-          </div>
+          </fieldset>
 
           {/* Right Area: PDF Preview Canvas */}
-          <div className="flex-1 bg-gray-100 p-4 overflow-auto flex items-start justify-center min-h-[400px]">
+          <div ref={scrollAreaRef} data-document-scroll="" className="flex-1 min-w-0 bg-gray-100 p-4 overflow-auto min-h-[400px]">
+            <div className="flex justify-center" style={{ width: Math.max(pageWidth, pageBaseWidth), minWidth: '100%' }}>
             <div
               ref={pageContainerRef}
-              className="relative bg-white border border-gray-300 shadow-md select-none overflow-hidden w-full shrink-0"
-              style={{ maxWidth: 560, aspectRatio: '1 / 1.414' }}
+              data-document-page=""
+              onPointerMove={onPointerMove} onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={finishDrag}
+              className="relative bg-white outline outline-1 outline-gray-300 shadow-md select-none overflow-hidden shrink-0"
+              style={{ width: pageWidth, aspectRatio: '210 / 297' }}
             >
               {pdfLoading && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10 gap-2">
@@ -886,9 +769,9 @@ export function AdminAdjustSignaturesModal({
                   <p className="text-xs text-gray-500 font-medium">กำลังโหลดแบบฟอร์มเอกสาร...</p>
                 </div>
               )}
-              {pdfError && (
+              {(pdfError || fontError) && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-50 text-sm text-red-500 p-6 text-center">
-                  {pdfError}
+                  {pdfError || 'ไม่สามารถแสดงข้อความได้ กรุณาเปิดเอกสารอีกครั้ง'}
                 </div>
               )}
 
@@ -901,13 +784,24 @@ export function AdminAdjustSignaturesModal({
                 />
               )}
 
+              {showGuides && imageUrl && (
+                <div aria-hidden="true" className="absolute inset-0 pointer-events-none z-20"
+                  style={{ backgroundImage: 'linear-gradient(to right, rgba(59,130,246,.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(59,130,246,.18) 1px, transparent 1px)', backgroundSize: `${5 / 210 * 100}% ${5 / 297 * 100}%` }} />
+              )}
+              {showGuides && selectedPosition && (
+                <>
+                  <div className="absolute top-0 bottom-0 border-l border-amber-500 pointer-events-none z-20" style={{ left: `${selectedPosition.x}%` }} />
+                  <div className="absolute left-0 right-0 border-t border-amber-500 pointer-events-none z-20" style={{ top: `${selectedPosition.y}%` }} />
+                </>
+              )}
+
               {/* Draggable signatures and text overlays */}
               {!pdfLoading && imageUrl && steps.map((step, idx) => {
                 const stepPage = step.page || 1;
                 if (stepPage !== pageNum) return null;
                 const colorIdx = idx % borderColors.length;
                 const sigSize = step.signatureSize || 12;
-                const borderHex = step.level === 1 ? 'border-blue-500' : step.level === 2 ? 'border-emerald-500' : 'border-purple-500';
+                const outlineHex = step.level === 1 ? 'outline-blue-500' : step.level === 2 ? 'outline-emerald-500' : 'outline-purple-500';
                 const bgHex = step.level === 1 ? 'bg-blue-600' : step.level === 2 ? 'bg-emerald-600' : 'bg-purple-600';
                 return (
                   <React.Fragment key={step.level}>
@@ -917,11 +811,12 @@ export function AdminAdjustSignaturesModal({
                         <img
                           src={step.signatureData}
                           alt={`ลายเซ็นระดับ ${step.level}`}
-                          onMouseDown={e => onMouseDown(e, step.level, 'signature')}
-                          onTouchStart={e => onTouchStart(e, step.level, 'signature')}
-                          className={`w-full h-auto cursor-grab active:cursor-grabbing select-none mix-blend-multiply border-2 border-dashed ${borderHex} hover:scale-102 transition-transform`}
+                          data-placement-key={itemKey({ level: step.level, type: 'signature' })}
+                          data-placement-selected={selectedKey === itemKey({ level: step.level, type: 'signature' })}
+                          onPointerDown={e => onPointerDown(e, step.level, 'signature')}
+                          className={`w-full h-auto cursor-grab active:cursor-grabbing select-none mix-blend-multiply outline outline-2 outline-dashed ${outlineHex}`}
                           draggable={false}
-                          style={{ touchAction: 'none' }}
+                          style={{ touchAction: 'none', outlineColor: selectedKey === itemKey({ level: step.level, type: 'signature' }) ? '#f59e0b' : undefined }}
                         />
                         <div className={`absolute -top-3.5 left-0 text-[8px] font-semibold text-white px-1.5 py-0.5 rounded shadow-xs whitespace-nowrap ${bgHex} pointer-events-none`}>
                           ระดับ {step.level}
@@ -935,11 +830,12 @@ export function AdminAdjustSignaturesModal({
                         <img
                           src={step.signatureData}
                           alt={`ลายเซ็นระดับ ${step.level} (พิเศษ ${exIdx + 2})`}
-                          onMouseDown={e => onMouseDown(e, step.level, 'extraSignature', exIdx)}
-                          onTouchStart={e => onTouchStart(e, step.level, 'extraSignature', exIdx)}
-                          className={`w-full h-auto cursor-grab active:cursor-grabbing select-none mix-blend-multiply border-2 border-dashed ${borderHex} opacity-90`}
+                          data-placement-key={itemKey({ level: step.level, type: 'extraSignature', extraIndex: exIdx })}
+                          data-placement-selected={selectedKey === itemKey({ level: step.level, type: 'extraSignature', extraIndex: exIdx })}
+                          onPointerDown={e => onPointerDown(e, step.level, 'extraSignature', exIdx)}
+                          className={`w-full h-auto cursor-grab active:cursor-grabbing select-none mix-blend-multiply outline outline-2 outline-dashed ${outlineHex} opacity-90`}
                           draggable={false}
-                          style={{ touchAction: 'none' }}
+                          style={{ touchAction: 'none', outlineColor: selectedKey === itemKey({ level: step.level, type: 'extraSignature', extraIndex: exIdx }) ? '#f59e0b' : undefined }}
                         />
                         <div className={`absolute -top-3.5 left-0 text-[8px] font-semibold text-white px-1.5 py-0.5 rounded shadow-xs whitespace-nowrap ${bgHex} pointer-events-none`}>
                           ระดับ {step.level} (จุด {exIdx + 2})
@@ -948,168 +844,76 @@ export function AdminAdjustSignaturesModal({
                     ))}
 
                     {step.checkmarkBlock && step.checkmarkX !== undefined && step.checkmarkY !== undefined && (
-                      <div
-                        onMouseDown={e => onMouseDown(e, step.level, 'checkmark')}
-                        onTouchStart={e => onTouchStart(e, step.level, 'checkmark')}
-                        className="absolute cursor-grab active:cursor-grabbing select-none font-bold text-gray-800 bg-transparent border border-dashed border-gray-500 rounded flex items-center justify-center"
-                        style={{
-                          left: `${step.checkmarkX}%`,
-                          top: `${step.checkmarkY}%`,
-                          fontSize: `${step.checkmarkSize || 15}px`,
-                          lineHeight: 1,
-                          touchAction: 'none'
-                        }}
-                      >
-                        {step.checkmarkBlock}
-                      </div>
+                      <DocumentCheckmarkOverlay
+                        x={step.checkmarkX} y={step.checkmarkY} size={step.checkmarkSize || 15}
+                        data-placement-key={itemKey({ level: step.level, type: 'checkmark' })}
+                        data-placement-selected={selectedKey === itemKey({ level: step.level, type: 'checkmark' })}
+                        onPointerDown={e => onPointerDown(e, step.level, 'checkmark')}
+                        style={{ outlineColor: selectedKey === itemKey({ level: step.level, type: 'checkmark' }) ? '#f59e0b' : undefined }}
+                        className="cursor-grab active:cursor-grabbing outline outline-1 outline-dashed outline-gray-500 rounded"
+                      />
                     )}
 
                     {/* Date Block */}
                     {step.dateBlock && step.dateX !== undefined && step.dateY !== undefined && (
-                      <div
-                        onMouseDown={e => onMouseDown(e, step.level, 'date')}
-                        onTouchStart={e => onTouchStart(e, step.level, 'date')}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none text-gray-800 font-semibold border border-dashed border-gray-400 bg-transparent rounded whitespace-nowrap`}
-                        style={{
-                          left: `${step.dateX}%`,
-                          top: `${step.dateY}%`,
-                          fontSize: `${step.dateSize || 10}px`,
-                          fontFamily: 'THSarabun, sans-serif',
-                          lineHeight: 1,
-                          touchAction: 'none'
-                        }}
-                      >
-                        {step.dateBlock}
-                      </div>
+                      <DocumentTextOverlay
+                        text={step.dateBlock} x={step.dateX} y={step.dateY} size={step.dateSize || 10}
+                        data-placement-key={itemKey({ level: step.level, type: 'date' })}
+                        data-placement-selected={selectedKey === itemKey({ level: step.level, type: 'date' })}
+                        onPointerDown={e => onPointerDown(e, step.level, 'date')}
+                        style={{ outlineColor: selectedKey === itemKey({ level: step.level, type: 'date' }) ? '#f59e0b' : undefined }}
+                        className="cursor-grab active:cursor-grabbing outline outline-1 outline-dashed outline-gray-400 rounded"
+                      />
                     )}
 
                     {/* Text Block */}
                     {step.textBlock && step.textBlockX !== undefined && step.textBlockY !== undefined && (
-                      <div
-                        onMouseDown={e => onMouseDown(e, step.level, 'text')}
-                        onTouchStart={e => onTouchStart(e, step.level, 'text')}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none text-gray-800 font-semibold border border-dashed border-gray-400 bg-transparent rounded whitespace-nowrap`}
-                        style={{
-                          left: `${step.textBlockX}%`,
-                          top: `${step.textBlockY}%`,
-                          fontSize: `${step.textBlockSize || 10}px`,
-                          fontFamily: 'THSarabun, sans-serif',
-                          lineHeight: 1,
-                          touchAction: 'none'
-                        }}
-                      >
-                        {step.textBlock}
-                      </div>
+                      <DocumentTextOverlay
+                        text={step.textBlock} x={step.textBlockX} y={step.textBlockY} size={step.textBlockSize || 10}
+                        data-placement-key={itemKey({ level: step.level, type: 'text' })}
+                        data-placement-selected={selectedKey === itemKey({ level: step.level, type: 'text' })}
+                        onPointerDown={e => onPointerDown(e, step.level, 'text')}
+                        style={{ outlineColor: selectedKey === itemKey({ level: step.level, type: 'text' }) ? '#f59e0b' : undefined }}
+                        className="cursor-grab active:cursor-grabbing outline outline-1 outline-dashed outline-gray-400 rounded"
+                      />
                     )}
 
                     {/* Extra Text Blocks */}
                     {step.extraTextBlocks?.map((tb, tbIdx) => (
-                      <div
+                      <DocumentTextOverlay
                         key={`extra-text-${step.level}-${tbIdx}`}
-                        onMouseDown={e => onMouseDown(e, step.level, 'extraText', tbIdx)}
-                        onTouchStart={e => onTouchStart(e, step.level, 'extraText', tbIdx)}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none text-gray-800 font-semibold border border-dashed border-blue-400 bg-transparent rounded whitespace-nowrap`}
-                        style={{
-                          left: `${tb.x}%`,
-                          top: `${tb.y}%`,
-                          fontSize: `${tb.size}px`,
-                          fontFamily: 'THSarabun, sans-serif',
-                          lineHeight: 1,
-                          touchAction: 'none'
-                        }}
+                        text={tb.val} x={tb.x} y={tb.y} size={tb.size || 10}
+                        data-placement-key={itemKey({ level: step.level, type: 'extraText', extraIndex: tbIdx })}
+                        data-placement-selected={selectedKey === itemKey({ level: step.level, type: 'extraText', extraIndex: tbIdx })}
+                        onPointerDown={e => onPointerDown(e, step.level, 'extraText', tbIdx)}
+                        style={{ outlineColor: selectedKey === itemKey({ level: step.level, type: 'extraText', extraIndex: tbIdx }) ? '#f59e0b' : undefined }}
+                        className="cursor-grab active:cursor-grabbing outline outline-1 outline-dashed outline-blue-400 rounded"
                       >
-                        {tb.val}
                         <div className={`absolute -top-3 left-0 text-[7px] font-semibold text-white px-1 py-0.5 rounded shadow-xs whitespace-nowrap ${bgHex} pointer-events-none`}>
                           เสริม {tbIdx + 1}
                         </div>
-                      </div>
+                      </DocumentTextOverlay>
                     ))}
                   </React.Fragment>
                 );
               })}
+            </div>
             </div>
           </div>
         </div>
 
         {/* Footer Actions */}
         <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 rounded-b-2xl">
-          <div className="relative flex flex-col gap-1.5">
-            {otherActiveSubmissions.length > 0 ? (
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowOtherSubsList(!showOtherSubsList)}
-                    disabled={saving}
-                    className="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100/80 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg border border-blue-200 transition-colors cursor-pointer"
-                  >
-                    ⚙️ เลือกอัปเดตไปยังเอกสารอื่นด้วย ({selectedSubIds.length} รายการ)
-                  </button>
-                  {selectedSubIds.length > 0 && (
-                    <span className="text-[10px] text-blue-600 font-semibold bg-blue-100/50 px-1.5 py-0.5 rounded border border-blue-200">
-                      เตรียมคัดลอกตำแหน่ง
-                    </span>
-                  )}
-                </div>
-
-                {showOtherSubsList && (
-                  <div className="absolute bottom-full mb-2 left-0 z-50 w-80 bg-white border border-gray-200 rounded-xl shadow-xl p-3 space-y-2 max-h-56 overflow-y-auto">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
-                      <span className="text-[11px] font-bold text-gray-600">เลือกเอกสารปลายทาง:</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (selectedSubIds.length === otherActiveSubmissions.length) {
-                            setSelectedSubIds([]);
-                          } else {
-                            setSelectedSubIds(otherActiveSubmissions.map(s => s.id));
-                          }
-                        }}
-                        className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
-                      >
-                        {selectedSubIds.length === otherActiveSubmissions.length ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
-                      </button>
-                    </div>
-                    <div className="space-y-1">
-                      {otherActiveSubmissions.map(os => {
-                        const dateStr = os.created_at
-                          ? new Date(os.created_at).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                          : '';
-                        return (
-                          <label key={os.id} className="flex items-start gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer select-none text-[11px] transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={selectedSubIds.includes(os.id)}
-                              onChange={() => {
-                                setSelectedSubIds(prev =>
-                                  prev.includes(os.id) ? prev.filter(id => id !== os.id) : [...prev, os.id]
-                                );
-                              }}
-                              className="mt-0.5 rounded border-gray-300 text-[#1a5c2e] focus:ring-[#1a5c2e] h-3.5 w-3.5 cursor-pointer"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-700 truncate">{os.student_name}</p>
-                              <p className="text-[9px] text-gray-400 truncate">{os.department || 'ไม่ระบุภาควิชา'} • {dateStr}</p>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-[10px] text-gray-400 italic">ไม่มีเอกสารอื่นที่ยังไม่เสร็จสิ้นประเภทนี้ในระบบ</p>
-            )}
-            <p className="text-[10px] text-gray-400">ระบบจะคัดลอกตำแหน่ง ขนาด ตัวหนังสือ และเครื่องหมายไปยังเอกสารที่เลือก</p>
-          </div>
+          <p role={invalidPage ? 'alert' : undefined} className={`text-xs ${invalidPage ? 'text-red-600' : 'text-gray-500'}`}>
+            {invalidPage ? 'กรุณาเลือกหน้าเอกสารที่มีอยู่จริงให้ครบก่อนบันทึก' : 'ปรับเฉพาะคำร้องนี้'}
+          </p>
           <div className="flex gap-2 w-full sm:w-auto justify-end">
             <button onClick={onClose} disabled={saving} className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-semibold text-gray-600 transition-colors disabled:opacity-50">
               ยกเลิก
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={blocked || invalidPage}
               className="px-4 py-2 bg-[#1a5c2e] hover:bg-green-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed min-w-[160px] justify-center"
             >
               {saving ? (

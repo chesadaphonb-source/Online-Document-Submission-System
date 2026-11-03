@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useRef, ReactNode, useCallback, useEffect } from 'react';
 import {
   Submission, ApprovalStep, initialSubmissions, SubmissionStatus, mockAdmin, FormTypeId
 } from '../data/mockData';
@@ -6,6 +6,7 @@ import { useNotifications, Notification } from './NotificationContext';
 import { supabase, isSupabaseConfigured, supabaseStorage } from '../lib/supabase';
 import { generateCertificateHash, generateAdjustedPDFBlob } from '../lib/generateApprovalPDF';
 import { toast } from 'sonner';
+import { saveSignaturePlacement } from '../lib/saveSignaturePlacement.js';
 
 interface SubmissionsContextType {
   submissions: Submission[];
@@ -51,8 +52,9 @@ interface SubmissionsContextType {
     formType: FormTypeId,
     updatedSteps: ApprovalStep[],
     targetSubmissionIds: string[],
-    adminName?: string
-  ) => Promise<void>;
+    adminName?: string,
+    sourceSubmission?: Submission
+  ) => Promise<boolean>;
 }
 
 const SubmissionsContext = createContext<SubmissionsContextType | undefined>(undefined);
@@ -163,6 +165,7 @@ async function dbUpdate(id: string, changes: Partial<Submission>) {
 
 export function SubmissionsProvider({ children }: { children: ReactNode }) {
   const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions);
+  const pendingPlacementSaves = useRef(new Set<string>());
   const { addNotification, addNotifications } = useNotifications();
 
   // ── โหลดจาก Supabase เมื่อ mount ──────────────────────────
@@ -728,148 +731,45 @@ export function SubmissionsProvider({ children }: { children: ReactNode }) {
     formType: FormTypeId,
     updatedSteps: ApprovalStep[],
     targetSubmissionIds: string[],
-    adminName?: string
-  ) => {
-    const now = new Date().toISOString();
-    const dbUpdates: { id: string; steps: ApprovalStep[]; extraChanges?: Partial<Submission> }[] = [];
-
-    // ── Step 1: Update approvalSteps in state ──────────────────
-    const nextSubmissions = submissions.map(s => {
-      if (s.id === submissionId) {
-        const extraChanges: Partial<Submission> = {
-          signatureAdjustedAt: now,
-          signatureAdjustedBy: adminName || 'Super Admin',
-          // Save original attachment URL on first adjustment
-          originalAttachmentUrl: s.originalAttachmentUrl || s.attachments?.[0]?.url,
-        };
-        dbUpdates.push({ id: s.id, steps: updatedSteps, extraChanges });
-        return { ...s, approvalSteps: updatedSteps, updatedAt: now, ...extraChanges };
-      }
-      if (targetSubmissionIds.includes(s.id)) {
-        const newSteps = s.approvalSteps.map(step => {
-          const matchingUpdatedStep = updatedSteps.find(us => us.level === step.level);
-          if (!matchingUpdatedStep) return step;
-
-          // Helper to resolve text values (name/role) for the target step
-          const resolveText = (textVal: string | undefined) => {
-            if (!textVal) return textVal;
-            const sourceStep = updatedSteps.find(us => us.level === step.level);
-            const sourceName = sourceStep?.approverName || '';
-            const sourceRole = sourceStep?.roleName || '';
-            const targetName = step.approverName || '';
-            const targetRole = step.roleName || '';
-
-            if (sourceName && textVal === sourceName) {
-              return targetName;
-            }
-            if (sourceRole && textVal === sourceRole) {
-              return targetRole;
-            }
-            return textVal;
-          };
-
-          const resolvedExtraTextBlocks = matchingUpdatedStep.extraTextBlocks?.map(etb => {
-            return {
-              ...etb,
-              val: resolveText(etb.val) || ''
-            };
-          });
-
-          return {
-            ...step,
-            signatureX: matchingUpdatedStep.signatureX,
-            signatureY: matchingUpdatedStep.signatureY,
-            signatureSize: matchingUpdatedStep.signatureSize,
-            extraSignaturePositions: matchingUpdatedStep.extraSignaturePositions,
-            checkmarkBlock: matchingUpdatedStep.checkmarkBlock,
-            checkmarkX: matchingUpdatedStep.checkmarkX,
-            checkmarkY: matchingUpdatedStep.checkmarkY,
-            checkmarkSize: matchingUpdatedStep.checkmarkSize,
-            dateBlock: matchingUpdatedStep.dateBlock,
-            dateX: matchingUpdatedStep.dateX,
-            dateY: matchingUpdatedStep.dateY,
-            dateSize: matchingUpdatedStep.dateSize,
-            textBlock: resolveText(matchingUpdatedStep.textBlock),
-            textBlockX: matchingUpdatedStep.textBlockX,
-            textBlockY: matchingUpdatedStep.textBlockY,
-            textBlockSize: matchingUpdatedStep.textBlockSize,
-            extraTextBlocks: resolvedExtraTextBlocks,
-          };
-        });
-        dbUpdates.push({ id: s.id, steps: newSteps });
-        return { ...s, approvalSteps: newSteps, updatedAt: now };
-      }
-      return s;
-    });
-
-    setSubmissions(nextSubmissions);
-
-    // ── Step 2: Persist approvalSteps to DB ────────────────────
-    for (const { id, steps, extraChanges } of dbUpdates) {
-      await dbUpdate(id, { approvalSteps: steps, ...(extraChanges || {}) });
+    adminName?: string,
+    sourceSubmission?: Submission,
+  ): Promise<boolean> => {
+    if (pendingPlacementSaves.current.has(submissionId)) return false;
+    if (targetSubmissionIds.length) {
+      toast.error('กรุณาปรับแต่ละคำร้องแยกกัน เพราะตำแหน่งในไฟล์เอกสารอาจต่างกัน');
+      return false;
     }
-
-    // ── Step 3: Generate adjusted PDF and upload to Supabase Storage ──
-    const targetSub = nextSubmissions.find(s => s.id === submissionId);
-    if (targetSub && targetSub.attachments && targetSub.attachments.length > 0) {
-      const attach = targetSub.attachments[0];
-      // Use the original attachment URL for regeneration (not an already-adjusted one)
-      const sourceUrl = targetSub.originalAttachmentUrl || attach.url;
-      const toastId = toast.loading('กำลังสร้างเอกสารใหม่พร้อมลายเซ็นที่ปรับตำแหน่งแล้ว...');
-      try {
-        const pdfBlob = await generateAdjustedPDFBlob(targetSub, sourceUrl, attach.name);
-
-        // Upload to Supabase Storage if configured
-        const activeStorage = supabaseStorage || supabase;
-        if (isSupabaseConfigured && activeStorage) {
-          const storagePath = `submissions/${submissionId}/adjusted_${Date.now()}.pdf`;
-          const { error: uploadError } = await activeStorage.storage
-            .from('attachments')
-            .upload(storagePath, pdfBlob, {
-              contentType: 'application/pdf',
-              upsert: true,
-            });
-
-          if (uploadError) {
-            console.error('Upload error:', uploadError);
-            toast.error('อัปโหลดเอกสารที่ปรับแก้ไม่สำเร็จ', { id: toastId });
-            return;
-          }
-
-          // Get public URL
-          const { data: urlData } = activeStorage.storage
-            .from('attachments')
-            .getPublicUrl(storagePath);
-
-          const newUrl = urlData.publicUrl + `?t=${Date.now()}`;
-
-          // Update the attachment URL in submission state
-          const updatedAttachments = [{ ...attach, url: newUrl, name: attach.name.replace(/\.[^.]+$/, '.pdf'), type: 'pdf' as const }, ...targetSub.attachments.slice(1)];
-
-          setSubmissions(prev => prev.map(s =>
-            s.id === submissionId
-              ? { ...s, attachments: updatedAttachments, updatedAt: new Date().toISOString() }
-              : s
-          ));
-
-          await dbUpdate(submissionId, { attachments: updatedAttachments });
-          toast.success('สร้างเอกสารใหม่และอัปโหลดเรียบร้อยแล้ว', { id: toastId });
-        } else {
-          // No Supabase — create blob URL for local preview
-          const blobUrl = URL.createObjectURL(pdfBlob);
-          const updatedAttachments = [{ ...attach, url: blobUrl, name: attach.name.replace(/\.[^.]+$/, '.pdf'), type: 'pdf' as const }, ...targetSub.attachments.slice(1)];
-
-          setSubmissions(prev => prev.map(s =>
-            s.id === submissionId
-              ? { ...s, attachments: updatedAttachments, updatedAt: new Date().toISOString() }
-              : s
-          ));
-          toast.success('สร้างเอกสารใหม่เรียบร้อยแล้ว (โหมดทดสอบ)', { id: toastId });
-        }
-      } catch (err) {
-        console.error('Failed to generate adjusted PDF:', err);
-        toast.error('ไม่สามารถสร้างเอกสารที่ปรับแก้ได้', { id: toastId });
-      }
+    const current = submissions.find(item => item.id === submissionId);
+    const source = sourceSubmission || current;
+    if (!current || !source || source.id !== submissionId || source.formType !== formType || current.formType !== formType) {
+      toast.error('ไม่พบคำร้องหรือแบบฟอร์มที่ต้องการปรับตำแหน่ง');
+      return false;
+    }
+    if (source.updatedAt !== current.updatedAt) {
+      toast.error('คำร้องมีการเปลี่ยนแปลง กรุณาเปิดคำร้องใหม่ก่อนปรับตำแหน่ง');
+      return false;
+    }
+    pendingPlacementSaves.current.add(submissionId);
+    const toastId = toast.loading('กำลังสร้างและบันทึกเอกสารพร้อมตำแหน่งใหม่...');
+    try {
+      const activeStorage = supabaseStorage || supabase;
+      const { changes } = await saveSignaturePlacement({
+        client: isSupabaseConfigured ? supabase : null,
+        storage: activeStorage?.storage,
+        submission: source,
+        updatedSteps,
+        generatePdf: generateAdjustedPDFBlob,
+        adminName,
+      });
+      setSubmissions(previous => previous.map(item => item.id === submissionId ? { ...item, ...changes } : item));
+      toast.dismiss(toastId);
+      return true;
+    } catch (error) {
+      console.error('[KU-Paper] Signature placement save failed:', error);
+      toast.error(error instanceof Error ? error.message : 'บันทึกตำแหน่งไม่สำเร็จ กรุณาลองใหม่', { id: toastId });
+      return false;
+    } finally {
+      pendingPlacementSaves.current.delete(submissionId);
     }
   }, [submissions]);
 
