@@ -2,6 +2,7 @@ import { createContext, useContext, useState, ReactNode, useCallback, useEffect 
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { SUPER_ADMIN_EMAILS } from './SystemContext';
+import { selectAdminNotificationEmails } from '../lib/adminNotificationRecipients';
 
 // ============================================================
 // TYPES
@@ -146,15 +147,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.from('users').select('email, department').eq('role', 'admin');
         if (error) { console.warn('[lookupEmails] admin query error:', error.message); return []; }
         if (!data) return [];
-        const filtered = data
-          .filter((u: any) => {
-            const isSuper = u.email ? SUPER_ADMIN_EMAILS.includes(u.email) : false;
-            if (isSuper) return true;
-            if (!department) return true;
-            return u.department?.trim().toLowerCase() === department.trim().toLowerCase();
-          })
-          .map((r: any) => r.email)
-          .filter(Boolean);
+        const filtered = selectAdminNotificationEmails(data, department, SUPER_ADMIN_EMAILS);
         console.log('[lookupEmails] role:admin →', filtered);
         return filtered;
       } else if (recipientId === 'role:teacher') {
