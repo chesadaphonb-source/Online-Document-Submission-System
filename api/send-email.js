@@ -1,6 +1,27 @@
 // api/send-email.js — Gmail SMTP via Nodemailer (Vercel Serverless)
 import nodemailer from 'nodemailer';
 
+const EMAIL_PATTERN = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
+
+function normalizeEmail(value) {
+  if (typeof value !== 'string') return '';
+  const email = value.trim().toLowerCase();
+  return email.length <= 254 && EMAIL_PATTERN.test(email) ? email : '';
+}
+
+function safeLabel(value, pattern, maximum) {
+  return typeof value === 'string' && value.length <= maximum && pattern.test(value) ? value : undefined;
+}
+
+function messageIdFor(info) {
+  return safeLabel(info?.messageId, /^(?:<[a-z0-9._+=-]+@[a-z0-9.-]+>|[a-z0-9_-]+)$/i, 254);
+}
+
+function smtpAddresses(values) {
+  return new Set((Array.isArray(values) ? values : []).map(value =>
+    normalizeEmail(typeof value === 'string' ? value : value?.address)).filter(Boolean));
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -15,32 +36,37 @@ export default async function handler(req, res) {
   }
 
   const { to, subject, type, message, submissionName, senderName, actionUrl,
-          studentName, studentEmail, department, studentId } = req.body;
+          studentName, studentEmail, department, studentId, submissionId } = req.body || {};
 
-  if (!to || !subject) {
+  if (!to || typeof subject !== 'string' || !subject.trim()) {
     return res.status(400).json({ error: 'Missing required fields: to, subject' });
   }
 
   const toArray = Array.isArray(to) ? to : [to];
-  const validEmails = toArray.filter(e => e && typeof e === 'string' && e.includes('@'));
-
-  if (validEmails.length === 0) {
-    return res.status(400).json({ error: 'No valid email addresses' });
+  const normalized = toArray.map(normalizeEmail);
+  if (!normalized.length || normalized.some(email => !email)) {
+    return res.status(400).json({ error: 'Every recipient must be a valid email address' });
   }
-
-  // สร้าง transporter ด้วย Gmail SMTP
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: gmailUser,
-      pass: gmailPass.replace(/\s/g, ''), // ลบ space ออกจาก App Password
-    },
-  });
-
-  const emailHtml = buildTemplate({ subject, message, submissionName, senderName, type, actionUrl,
-                                    studentName, studentEmail, department, studentId });
+  const validEmails = [...new Set(normalized)];
+  const correlation = {
+    type: safeLabel(type, /^[a-z][a-z_]*$/, 40),
+    submissionId: safeLabel(submissionId, /^[a-z0-9_-]+$/i, 128),
+    requestedCount: validEmails.length,
+  };
 
   try {
+    // สร้าง transporter ด้วย Gmail SMTP
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: gmailUser,
+        pass: gmailPass.replace(/\s/g, ''), // ลบ space ออกจาก App Password
+      },
+    });
+
+    const emailHtml = buildTemplate({ subject, message, submissionName, senderName, type, actionUrl,
+                                      studentName, studentEmail, department, studentId });
+
     const info = await transporter.sendMail({
       from: `"KU-Paper Notifications 🌿" <${gmailUser}>`,
       to: validEmails.join(', '),
@@ -48,11 +74,42 @@ export default async function handler(req, res) {
       html: emailHtml,
     });
 
-    console.log('[send-email] Sent:', info.messageId, '→', validEmails);
-    return res.status(200).json({ success: true, messageId: info.messageId });
+    const accepted = smtpAddresses(info?.accepted);
+    const rejected = smtpAddresses(info?.rejected);
+    const acceptedCount = validEmails.filter(email => accepted.has(email) && !rejected.has(email)).length;
+    const rejectedCount = Array.isArray(info?.rejected) ? info.rejected.length : 0;
+    const messageId = messageIdFor(info);
+    const counts = { requestedCount: validEmails.length, acceptedCount, rejectedCount };
+    const allAccepted = acceptedCount === validEmails.length && rejectedCount === 0;
+
+    if (!allAccepted) {
+      // Some recipients may already have received this message. Never retry the
+      // whole list automatically or imply that a resolved sendMail means success.
+      const partial = acceptedCount > 0;
+      console.warn('[send-email] Delivery not fully accepted', {
+        ...correlation, ...counts, messageId, status: partial ? 'partial' : 'not_accepted',
+      });
+      return res.status(502).json({
+        success: false, partial,
+        code: partial ? 'EMAIL_PARTIALLY_ACCEPTED' : 'EMAIL_NOT_ACCEPTED',
+        error: partial ? 'Email was accepted for only some recipients.' : 'Email delivery was not accepted for the requested recipients.',
+        ...counts, ...(messageId ? { messageId } : {}),
+      });
+    }
+
+    console.log('[send-email] Delivery accepted', { ...correlation, ...counts, messageId, status: 'accepted' });
+    return res.status(200).json({ success: true, ...counts, ...(messageId ? { messageId } : {}) });
   } catch (err) {
-    console.error('[send-email] Error:', err);
-    return res.status(500).json({ error: 'Failed to send email', detail: String(err) });
+    // Provider response/message fields can contain recipients, credentials or
+    // message content. Log only bounded SMTP codes and correlation metadata.
+    console.error('[send-email] Delivery failed', {
+      ...correlation,
+      code: safeLabel(err?.code, /^[A-Z0-9_]+$/, 40),
+      command: safeLabel(err?.command, /^[A-Z][A-Z0-9 _-]*$/, 40),
+      responseCode: Number.isInteger(err?.responseCode) && err.responseCode >= 100 && err.responseCode <= 599 ? err.responseCode : undefined,
+      status: 'failed',
+    });
+    return res.status(502).json({ success: false, code: 'EMAIL_SEND_FAILED', error: 'Unable to confirm email delivery.', requestedCount: validEmails.length });
   }
 }
 
