@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { SUPER_ADMIN_EMAILS } from './SystemContext';
 import { selectAdminNotificationEmails } from '../lib/adminNotificationRecipients';
+import { toast } from 'sonner';
 
 // ============================================================
 // TYPES
@@ -91,6 +92,36 @@ interface NotificationContextType {
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+let keepaliveBytesInFlight = 0;
+
+// The two channels have separate deadlines so a slow Chat webhook cannot hold
+// up email. An uncertain result is reported, never retried automatically: the
+// server may already have accepted the message before a connection was lost.
+async function postNotification(path: string, body: Record<string, unknown>, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const requestBody = JSON.stringify(body);
+  const bodyBytes = new TextEncoder().encode(requestBody).byteLength;
+  // Browsers cap the combined outstanding keepalive bodies at 64 KiB.
+  // Larger/busy batches use ordinary fetch rather than failing that quota.
+  const keepalive = keepaliveBytesInFlight + bodyBytes <= 60_000;
+  if (keepalive) keepaliveBytesInFlight += bodyBytes;
+  try {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: requestBody,
+      signal: controller.signal,
+      keepalive,
+    });
+    // Keep the reservation and timeout until the response is fully consumed.
+    await response.text();
+    if (!response.ok) throw new Error(`Notification request failed (HTTP ${response.status})`);
+  } finally {
+    clearTimeout(timeout);
+    if (keepalive) keepaliveBytesInFlight -= bodyBytes;
+  }
+}
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -140,7 +171,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [currentUser]);
 
   // Helper: ค้นหา email ของผู้รับจาก Supabase
-  const lookupEmails = async (recipientId: string, department?: string): Promise<string[]> => {
+  const lookupEmails = useCallback(async (recipientId: string, department?: string): Promise<string[]> => {
     if (!isSupabaseConfigured || !supabase) return [];
     try {
       if (recipientId === 'role:admin') {
@@ -171,7 +202,76 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       console.error('[lookupEmails] exception:', err);
       return [];
     }
-  };
+  }, []);
+
+  const deliverExternalNotifications = useCallback(async (ns: Omit<Notification, 'id' | 'createdAt' | 'isRead'>[]) => {
+    if (ns.length === 0) return;
+    // Keep test and preview deployments from contacting real recipients.
+    const isStg = typeof window !== 'undefined' && window.location.hostname !== 'ku-envipaper.vercel.app';
+    if (isStg) return;
+
+    const emailTask = async () => {
+      const results = await Promise.allSettled(ns.map(async n => {
+        let lookupTimeout: ReturnType<typeof setTimeout> | undefined;
+        let emails: string[];
+        try {
+          emails = await Promise.race([
+            lookupEmails(n.recipientId, n.department),
+            new Promise<string[]>((_, reject) => {
+              lookupTimeout = setTimeout(() => reject(new Error('Notification recipient lookup timed out')), 10_000);
+            }),
+          ]);
+        } finally {
+          clearTimeout(lookupTimeout);
+        }
+        // Guest students do not have a users row. Their supplied address is
+        // only a fallback for their own student-facing notification.
+        if (emails.length === 0 && n.recipientId.startsWith('student_') && n.actionUrl === '/student/track') {
+          const guestEmail = n.studentEmail?.trim();
+          if (guestEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) emails = [guestEmail];
+        }
+        if (emails.length === 0) throw new Error('Notification recipient could not be resolved');
+        await postNotification('/api/send-email', {
+          to: emails,
+          subject: n.title,
+          type: n.type,
+          message: n.message,
+          submissionId: n.submissionId,
+          submissionName: n.submissionName,
+          senderName: n.senderName,
+          actionUrl: n.actionUrl,
+          studentName: n.studentName,
+          studentEmail: n.studentEmail,
+          department: n.department,
+          studentId: n.studentId,
+        }, 20_000);
+      }));
+      const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+      if (failures.length > 0) {
+        console.error('[notifications] Email delivery could not be confirmed:', {
+          failedCount: failures.length,
+          totalCount: ns.length,
+          reasons: failures.map(result => result.reason instanceof Error ? result.reason.message : 'Unknown delivery error'),
+        });
+        toast.error('ไม่สามารถยืนยันการส่งอีเมลแจ้งเตือนครบทุกคน กรุณาติดต่อผู้ดูแลระบบ');
+      }
+    };
+    const chatTask = async () => {
+      const first = ns[0];
+      try {
+        await postNotification('/api/notify-chat', {
+          type: first.type,
+          title: ns.length > 1 ? `${first.title} (+${ns.length - 1} รายการ)` : first.title,
+          message: first.message,
+          submissionName: first.submissionName,
+          senderName: first.senderName,
+        }, 5_000);
+      } catch {
+        console.warn('[notifications] Google Chat delivery could not be confirmed');
+      }
+    };
+    await Promise.all([emailTask(), chatTask()]);
+  }, [lookupEmails]);
 
   const addNotification = useCallback(async (n: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => {
     const newNotif = makeNotification(n);
@@ -192,58 +292,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    // ตรวจสอบว่าเป็นสภาพแวดล้อม stg หรือไม่ (ถ้าใช่ จะไม่มีการส่งแจ้งเตือนภายนอกรบกวนผู้อื่น)
-    const isStg = typeof window !== 'undefined' && window.location.hostname !== 'ku-envipaper.vercel.app';
-    if (isStg) {
-      console.log('📢 [stg Bypass] ข้ามการยิงส่งอีเมลและส่ง Google Chat ในระบบทดสอบ:', n.title);
-      return;
-    }
-
-    // ส่งแจ้งเตือน Google Chat
-    try {
-      await fetch('/api/notify-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: n.type, title: n.title, message: n.message, submissionName: n.submissionName, senderName: n.senderName }),
-      });
-    } catch { /* ไม่หยุดระบบหลัก */ }
-
-    // ส่ง Email แจ้งเตือน
-    try {
-      // lookupEmails จาก Supabase ก่อน, ถ้าไม่เจอ ใช้ studentEmail ใน notification โดยตรง (fallback สำหรับนิสิต guest)
-      let emails = await lookupEmails(n.recipientId, n.department);
-      if (emails.length === 0 && n.studentEmail) {
-        emails = [n.studentEmail];
-      }
-      console.log('[addNotification] Sending email to:', emails, 'for type:', n.type);
-      if (emails.length > 0) {
-        const emailRes = await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: emails,
-            subject: n.title,
-            type: n.type,
-            message: n.message,
-            submissionName: n.submissionName,
-            senderName: n.senderName,
-            actionUrl: n.actionUrl,
-            studentName: n.studentName,
-            studentEmail: n.studentEmail,
-            department: n.department,
-            studentId: n.studentId,
-          }),
-        });
-        if (!emailRes.ok) {
-          const errBody = await emailRes.text();
-          console.error('[addNotification] send-email failed:', emailRes.status, errBody);
-        }
-      }
-    } catch (err) {
-      console.error('[addNotification] email exception:', err);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    await deliverExternalNotifications([n]);
+  }, [deliverExternalNotifications]);
 
   const addNotifications = useCallback(async (ns: Omit<Notification, 'id' | 'createdAt' | 'isRead'>[]) => {
     const newNotifs = ns.map(makeNotification);
@@ -265,61 +315,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       await supabase.from('notifications').insert(rows);
     }
 
-    // ตรวจสอบว่าเป็นสภาพแวดล้อม stg หรือไม่ (ถ้าใช่ จะไม่มีการส่งแจ้งเตือนภายนอกรบกวนผู้อื่น)
-    const isStg = typeof window !== 'undefined' && window.location.hostname !== 'ku-envipaper.vercel.app';
-    if (isStg) {
-      console.log('📢 [stg Bypass] ข้ามการยิงส่งอีเมลและส่ง Google Chat ในระบบทดสอบ:', ns.length, 'รายการ');
-      return;
-    }
-
-    // ส่งแจ้งเตือน Google Chat สำหรับรายการแรก
-    if (ns.length > 0) {
-      const first = ns[0];
-      try {
-        await fetch('/api/notify-chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: first.type,
-            title: ns.length > 1 ? `${first.title} (+${ns.length - 1} รายการ)` : first.title,
-            message: first.message,
-            submissionName: first.submissionName,
-            senderName: first.senderName,
-          }),
-        });
-      } catch { /* ไม่หยุดระบบหลัก */ }
-
-      // ส่ง Email แจ้งเตือนทุกคนในรายการ
-      try {
-        await Promise.all(ns.map(async (n) => {
-          let emails = await lookupEmails(n.recipientId, n.department);
-          if (emails.length === 0 && n.studentEmail) {
-            emails = [n.studentEmail];
-          }
-          if (emails.length > 0) {
-            await fetch('/api/send-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                to: emails,
-                subject: n.title,
-                type: n.type,
-                message: n.message,
-                submissionName: n.submissionName,
-                senderName: n.senderName,
-                actionUrl: n.actionUrl,
-                studentName: n.studentName,
-                studentEmail: n.studentEmail,
-                department: n.department,
-                studentId: n.studentId,
-              }),
-            });
-          }
-        }));
-      } catch { /* ไม่หยุดระบบหลัก */ }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    await deliverExternalNotifications(ns);
+  }, [deliverExternalNotifications]);
 
   const markAsRead = useCallback(async (notifId: string) => {
     setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, isRead: true } : n));
